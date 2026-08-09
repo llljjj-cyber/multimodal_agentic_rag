@@ -97,6 +97,7 @@ class ConversationModel(Base):
 
   id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
   user_id: Mapped[str] = mapped_column(String(16), ForeignKey("users.id", ondelete="CASCADE"),index=True)
+  adk_session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
   title: Mapped[str] = mapped_column(String(100), default="新对话")
   created_at: Mapped[datetime] = mapped_column(
       DateTime(timezone=True), server_default=func.now()

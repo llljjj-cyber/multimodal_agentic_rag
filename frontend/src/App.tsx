@@ -146,6 +146,50 @@ async function apiFetch(path: string, token: string | null, init: RequestInit = 
   return data;
 }
 
+/** POST /chat/stream：SSE 文本流；首包可能是 {"conv_id": n} */
+async function streamChat(
+  token: string,
+  body: { message: string; conv_id?: number | null },
+  onEvent: (payload: string) => void,
+) {
+  const headers = new Headers({
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  });
+  const res = await fetch(`${API}/chat/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(formatApiDetail((data as { detail?: unknown }).detail, `请求失败（${res.status}）`));
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
+  }
+  if (!res.body) throw new Error("浏览器不支持流式响应。");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = chunk
+        .split("\n")
+        .map((row) => row.trim())
+        .find((row) => row.startsWith("data:"));
+      if (!line) continue;
+      const payload = line.slice(5).trimStart();
+      if (payload) onEvent(payload);
+    }
+  }
+}
+
 const modalityIcon: Record<Modality, React.ElementType> = {
   text: FileText,
   url: Link,
@@ -662,6 +706,7 @@ function Workspace({
   const [trace, setTrace] = useState<AskResponse["trace"]>([]);
   const [queryPoint, setQueryPoint] = useState<RackPoint | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<RackPoint | null>(null);
+  const [convId, setConvId] = useState<number | null>(null);
   const [isAddingSource, setIsAddingSource] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [removingSourceId, setRemovingSourceId] = useState<string | null>(null);
@@ -795,11 +840,56 @@ function Workspace({
     }
   }
 
+  /** 主路径：多轮对话，走 /chat/stream + conv_id */
   async function askQuestion() {
     if (!question.trim()) return;
     setIsAsking(true);
     setQaError("");
-    setQaStatus("正在检索证据并请求 ADK 协调器…");
+    setQaStatus(convId ? `继续会话 #${convId}…` : "正在创建会话并流式回答…");
+    setAnswer("");
+    setMatches([]);
+    setTrace([]);
+    setQueryPoint(null);
+    try {
+      let nextConvId = convId;
+      let assembled = "";
+      await streamChat(
+        token,
+        { message: question.trim(), conv_id: convId },
+        (payload) => {
+          if (payload === "[DONE]") return;
+          if (payload.startsWith("{")) {
+            try {
+              const meta = JSON.parse(payload) as { conv_id?: number };
+              if (typeof meta.conv_id === "number") {
+                nextConvId = meta.conv_id;
+                setConvId(meta.conv_id);
+                return;
+              }
+            } catch {
+              // 非 meta JSON，当作普通文本 chunk
+            }
+          }
+          assembled += payload;
+          setAnswer(assembled);
+        },
+      );
+      setQaStatus(nextConvId ? `会话 #${nextConvId} 已更新。` : "回答完成。");
+      await refreshSpace().catch(() => undefined);
+    } catch (error) {
+      handleAuthFailure(error);
+      setQaError(error instanceof Error ? error.message : "出错了，请稍后重试。");
+    } finally {
+      setIsAsking(false);
+    }
+  }
+
+  /** 保留：一次性 /ask（含引用、轨迹、空间点） */
+  async function askOnce() {
+    if (!question.trim()) return;
+    setIsAsking(true);
+    setQaError("");
+    setQaStatus("正在检索证据并请求 ADK 协调器（/ask）…");
     setAnswer("");
     try {
       const data = (await apiFetch("/ask", token, {
@@ -807,17 +897,27 @@ function Workspace({
         body: JSON.stringify({ question, top_k: 6 }),
       })) as AskResponse;
       setAnswer(data.answer);
-      setMatches(data.matches);
-      setTrace(data.trace);
-      setQueryPoint(data.query_point);
-      setSpace(normalizeSpace(data.space));
-      setQaStatus(`已检索到 ${data.matches.length} 条引用。`);
+      setMatches(data.matches ?? []);
+      setTrace(data.trace ?? []);
+      setQueryPoint(data.query_point ?? null);
+      if (data.space) setSpace(normalizeSpace(data.space));
+      setQaStatus(`已检索到 ${(data.matches ?? []).length} 条引用。`);
     } catch (error) {
       handleAuthFailure(error);
       setQaError(error instanceof Error ? error.message : "出错了，请稍后重试。");
     } finally {
       setIsAsking(false);
     }
+  }
+
+  function startNewConversation() {
+    setConvId(null);
+    setAnswer("");
+    setMatches([]);
+    setTrace([]);
+    setQueryPoint(null);
+    setQaStatus("已开始新对话，下次提问将创建新会话。");
+    setQaError("");
   }
 
   return (
@@ -993,15 +1093,26 @@ function Workspace({
             <div className="panel-heading">
               <div>
                 <h2>问答</h2>
-                <p>提出问题，在此查看有依据的回答。</p>
+                <p>
+                  流式对话走 /chat/stream
+                  {convId != null ? ` · 当前会话 #${convId}` : " · 新会话"}
+                </p>
               </div>
               <Bot size={18} />
             </div>
             <label className="field-label">问题</label>
             <textarea className="question-box" value={question} onChange={(event) => setQuestion(event.target.value)} aria-label="问题" />
-            <button className="primary-button" onClick={askQuestion} disabled={isAsking}>
-              {isAsking ? <Loader2 className="spin" size={16} /> : <Send size={16} />} 提问
-            </button>
+            <div className="qa-actions" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button className="primary-button" onClick={askQuestion} disabled={isAsking}>
+                {isAsking ? <Loader2 className="spin" size={16} /> : <Send size={16} />} 流式提问
+              </button>
+              <button className="primary-button" onClick={askOnce} disabled={isAsking} title="一次性 /ask，含引用与轨迹">
+                {isAsking ? <Loader2 className="spin" size={16} /> : <Search size={16} />} 一次性问答
+              </button>
+              <button className="icon-button" onClick={startNewConversation} disabled={isAsking} title="新开对话（清空 conv_id）" aria-label="新对话">
+                <Plus size={16} />
+              </button>
+            </div>
             {(qaStatus || qaError) && (
               <div className={`inline-status ${qaError ? "error" : "success"}`} role="status">
                 {qaError || qaStatus}

@@ -51,3 +51,29 @@ class SourceOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class Conversation(BaseModel):
+    """对外会话视图：不暴露 adk_session_id（内部 Agent 记忆）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    created_at: datetime
+
+class Message(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    conv_id: int | None = None
+
+    
+class ChatResponse(BaseModel):
+    reply: str
+    conv_id: int

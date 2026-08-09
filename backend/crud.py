@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
-from models import ChunkModel, SourceModel, Base, UserModel
+from models import ChunkModel, ConversationModel, MessageModel, SourceModel, Base, UserModel
 
 
 async def create_chunk(
@@ -180,3 +180,95 @@ async def create_user(db: AsyncSession, username: str, hashed_password: str) -> 
     await db.commit()
     await db.refresh(user)
     return user
+
+async def create_conversation(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    title: str = "新对话",
+    adk_session_id: str | None = None,
+) -> ConversationModel:
+    conversation = ConversationModel(
+        user_id=user_id,
+        adk_session_id=adk_session_id,
+        title=title,
+    )
+    db.add(conversation)
+    await db.commit()
+    await db.refresh(conversation)
+    return conversation
+
+
+async def get_conversation(
+    db: AsyncSession,
+    conv_id: int,
+) -> ConversationModel | None:
+    result = await db.execute(
+        select(ConversationModel).where(ConversationModel.id == conv_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_conversation_session(
+    db: AsyncSession,
+    conv: ConversationModel,
+    adk_session_id: str,
+) -> ConversationModel:
+    conv.adk_session_id = adk_session_id
+    await db.commit()
+    await db.refresh(conv)
+    return conv
+
+
+async def list_conversations_by_user(
+    db: AsyncSession,
+    user_id: str,
+) -> list[ConversationModel]:
+    result = await db.execute(
+        select(ConversationModel)
+        .where(ConversationModel.user_id == user_id)
+        .order_by(ConversationModel.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def create_message(
+    db: AsyncSession,
+    *,
+    conv_id: int,
+    role: str,
+    content: str,
+) -> MessageModel:
+    message = MessageModel(
+        conversation_id=conv_id,
+        role=role,
+        content=content,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+    return message
+
+
+async def list_messages_by_conversation(
+    db: AsyncSession,
+    conv_id: int,
+    limit: int = 20,
+) -> list[MessageModel]:
+    result = await db.execute(
+        select(MessageModel)
+        .where(MessageModel.conversation_id == conv_id)
+        .order_by(MessageModel.created_at.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def delete_conversation(
+    db: AsyncSession,
+    conversation: ConversationModel,
+) -> None:
+    # 调用方负责删 ADK session
+    await db.delete(conversation)
+    await db.commit()
+
