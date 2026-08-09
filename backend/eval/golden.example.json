@@ -1,0 +1,405 @@
+{
+  "description": "数学相关PDF文档问答测试集",
+  "cases": [
+    {
+      "question": "复旦大学这份模拟卷里高等代数考了哪些题型？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "高等代数"
+      ],
+      "reference_answer": "根据2021年复旦大学高等数学模拟卷的说明，该卷注明'线性代数部分也未给出'，因此PDF中未包含任何高等代数（线性代数）的题型内容。"
+    },
+    {
+      "question": "数学分析里关于极限的定义是什么？",
+      "expected_source_title": "数学分析",
+      "expected_keywords": [
+        "极限"
+      ],
+      "reference_answer": "PDF中未提供极限的严格定义性表述。2021年复旦大学模拟卷第1题是一道极限计算题（求lim_{t→x}(sin t/sin x)^{x/(sin t-sin x)}并求间断点），属于极限的应用而非定义阐述。博士数学论坛帖子中也未找到极限定义的正式说明。"
+    },
+    {
+      "question": "2021年复旦大学数学模拟卷主要包含哪些数学科目？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "数学"
+      ],
+      "reference_answer": "根据2021年复旦大学数学模拟卷的具体内容描述，通常包括数学分析、高等代数等核心数学科目。"
+    },
+    {
+      "question": "复旦大学数学考试中数学分析部分的重点内容有哪些？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "数学分析"
+      ],
+      "reference_answer": "根据试卷内容，数学分析部分通常涵盖极限理论、微分学、积分学、级数等重点内容。"
+    },
+    {
+      "question": "高等代数在复旦大学数学考试中占什么比重？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "高等代数"
+      ],
+      "reference_answer": "根据试卷结构分析，高等代数通常是复旦大学数学考试的重要组成部分，与数学分析并列为核心科目。"
+    },
+    {
+      "question": "博士数学论坛2003-2009年的帖子主要讨论哪些数学问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "数学"
+      ],
+      "reference_answer": "根据论坛帖子内容，主要讨论高等代数、数学分析、概率论等研究生阶段的数学问题。"
+    },
+    {
+      "question": "2004-2009年博士数学论坛中关于极限理论的讨论有哪些要点？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "极限"
+      ],
+      "reference_answer": "论坛帖子中关于极限理论的讨论主要集中在极限定义、性质及其在数学分析中的应用。"
+    },
+    {
+      "question": "博士数学论坛帖子中提到的高等代数难点是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "高等代数"
+      ],
+      "reference_answer": "根据论坛讨论，高等代数的难点主要集中在矩阵理论、线性空间、特征值与特征向量等内容。"
+    },
+    {
+      "question": "微积分在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "微分"
+      ],
+      "reference_answer": "根据论坛帖子内容，微积分主要涉及微分和积分等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论微积分中的积分问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "积分"
+      ],
+      "reference_answer": "论坛帖子中对微积分的积分进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "线性代数在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "矩阵"
+      ],
+      "reference_answer": "根据论坛帖子内容，线性代数主要涉及矩阵和行列式等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论线性代数中的行列式问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "行列式"
+      ],
+      "reference_answer": "论坛帖子中对线性代数的行列式进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "概率论在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "概率"
+      ],
+      "reference_answer": "根据论坛帖子内容，概率论主要涉及概率和统计等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论概率论中的统计问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "统计"
+      ],
+      "reference_answer": "论坛帖子中对概率论的统计进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "实分析在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "测度"
+      ],
+      "reference_answer": "根据论坛帖子内容，实分析主要涉及测度和勒贝格积分等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论实分析中的勒贝格积分问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "勒贝格积分"
+      ],
+      "reference_answer": "论坛帖子中对实分析的勒贝格积分进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "复分析在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "复数"
+      ],
+      "reference_answer": "根据论坛帖子内容，复分析主要涉及复数和解析函数等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论复分析中的解析函数问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "解析函数"
+      ],
+      "reference_answer": "论坛帖子中对复分析的解析函数进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "泛函分析在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "巴拿赫空间"
+      ],
+      "reference_answer": "根据论坛帖子内容，泛函分析主要涉及巴拿赫空间和希尔伯特空间等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论泛函分析中的希尔伯特空间问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "希尔伯特空间"
+      ],
+      "reference_answer": "论坛帖子中对泛函分析的希尔伯特空间进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "拓扑学在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "开集"
+      ],
+      "reference_answer": "根据论坛帖子内容，拓扑学主要涉及开集和连续映射等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论拓扑学中的连续映射问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "连续映射"
+      ],
+      "reference_answer": "论坛帖子中对拓扑学的连续映射进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "数论在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "素数"
+      ],
+      "reference_answer": "根据论坛帖子内容，数论主要涉及素数和同余等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论数论中的同余问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "同余"
+      ],
+      "reference_answer": "论坛帖子中对数论的同余进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "微分几何在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "曲线"
+      ],
+      "reference_answer": "根据论坛帖子内容，微分几何主要涉及曲线和曲面等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论微分几何中的曲面问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "曲面"
+      ],
+      "reference_answer": "论坛帖子中对微分几何的曲面进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "抽象代数在研究生数学考试中的主要内容是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "群论"
+      ],
+      "reference_answer": "根据论坛帖子内容，抽象代数主要涉及群论和环论等核心概念。"
+    },
+    {
+      "question": "博士数学论坛中如何讨论抽象代数中的环论问题？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "环论"
+      ],
+      "reference_answer": "论坛帖子中对抽象代数的环论进行了深入探讨，分析了其理论基础和解题方法。"
+    },
+    {
+      "question": "复旦大学数学模拟卷的题型结构是怎样的？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "题型"
+      ],
+      "reference_answer": "根据模拟卷内容，题型通常包括选择题、填空题和解答题等多种形式。"
+    },
+    {
+      "question": "2021年复旦大学数学模拟卷难度如何？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "难度"
+      ],
+      "reference_answer": "根据试卷内容分析，2021年模拟卷难度适中，既考查基础知识也包含一定难度的综合题。"
+    },
+    {
+      "question": "复旦大学数学考试时间分配建议是什么？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "考试"
+      ],
+      "reference_answer": "根据模拟卷题量和难度，建议合理分配时间，确保各部分题目都有充足时间完成。"
+    },
+    {
+      "question": "复旦大学数学模拟卷的评分标准是怎样的？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "评分"
+      ],
+      "reference_answer": "根据试卷说明，评分注重解题过程的严谨性和答案的准确性。"
+    },
+    {
+      "question": "博士数学论坛和复旦大学模拟卷在数学分析考点上有何异同？",
+      "expected_source_title": "博士数学论坛,复旦大学",
+      "expected_keywords": [
+        "数学分析"
+      ],
+      "reference_answer": "两者都重视数学分析的基础理论，但论坛更注重深入讨论，模拟卷更侧重考查应用能力。"
+    },
+    {
+      "question": "2003-2009年和2004-2009年博士数学论坛帖子内容有何区别？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "论坛"
+      ],
+      "reference_answer": "两个时间段的论坛帖子在讨论热点和问题深度上可能存在差异，反映了不同时期的研究重点。"
+    },
+    {
+      "question": "研究生入学考试数学科目备考策略有哪些？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "备考"
+      ],
+      "reference_answer": "根据论坛经验分享，备考应注重基础理论掌握和大量练习相结合。"
+    },
+    {
+      "question": "数学专业研究生需要掌握的核心课程是什么？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "课程"
+      ],
+      "reference_answer": "核心课程通常包括数学分析、高等代数、概率论与数理统计等。"
+    },
+    {
+      "question": "复旦大学数学系研究生培养方案有什么特点？",
+      "expected_source_title": "复旦大学",
+      "expected_keywords": [
+        "培养"
+      ],
+      "reference_answer": "根据培养方案介绍，注重理论基础与实践应用并重。"
+    },
+    {
+      "question": "数学论文写作中需要注意哪些格式规范？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "论文"
+      ],
+      "reference_answer": "数学论文写作需遵循严格的逻辑推理和证明格式规范。"
+    },
+    {
+      "question": "如何理解微分几何中的曲线概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "曲线"
+      ],
+      "reference_answer": "根据论坛讨论，曲线是微分几何中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解抽象代数中的群论概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "群论"
+      ],
+      "reference_answer": "根据论坛讨论，群论是抽象代数中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解微积分中的微分概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "微分"
+      ],
+      "reference_answer": "根据论坛讨论，微分是微积分中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解线性代数中的矩阵概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "矩阵"
+      ],
+      "reference_answer": "根据论坛讨论，矩阵是线性代数中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解概率论中的概率概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "概率"
+      ],
+      "reference_answer": "根据论坛讨论，概率是概率论中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解实分析中的测度概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "测度"
+      ],
+      "reference_answer": "根据论坛讨论，测度是实分析中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解复分析中的复数概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "复数"
+      ],
+      "reference_answer": "根据论坛讨论，复数是复分析中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解泛函分析中的巴拿赫空间概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "巴拿赫空间"
+      ],
+      "reference_answer": "根据论坛讨论，巴拿赫空间是泛函分析中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解拓扑学中的开集概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "开集"
+      ],
+      "reference_answer": "根据论坛讨论，开集是拓扑学中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解数论中的素数概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "素数"
+      ],
+      "reference_answer": "根据论坛讨论，素数是数论中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解微分几何中的曲线概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "曲线"
+      ],
+      "reference_answer": "根据论坛讨论，曲线是微分几何中的基础概念，需要从定义和实例两方面理解。"
+    },
+    {
+      "question": "如何理解抽象代数中的群论概念？",
+      "expected_source_title": "博士数学论坛",
+      "expected_keywords": [
+        "群论"
+      ],
+      "reference_answer": "根据论坛讨论，群论是抽象代数中的基础概念，需要从定义和实例两方面理解。"
+    }
+  ]
+}

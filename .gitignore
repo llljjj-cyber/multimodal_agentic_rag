@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# 密钥和环境（千万不要提交）
+.env
+.env.*
+!.env.example
+backend/.env
+
+# 数据库本地数据
+pgdata/
+
+# Node 前端
+frontend/node_modules/
+frontend/dist/
+
+# IDE / 系统
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
