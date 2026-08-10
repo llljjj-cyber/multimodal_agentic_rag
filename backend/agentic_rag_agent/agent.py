@@ -1,6 +1,10 @@
+import os
+from dotenv import load_dotenv
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 from google.genai import types as genai_types
 
+load_dotenv()
 
 instruction1 = """
 你是多模态 Agentic RAG 工作区的 Google ADK 协调器。请始终使用简体中文回答。
@@ -29,7 +33,12 @@ def build_agent(tools: list | None = None) -> Agent:
     tools = tools or []
     return Agent(
         name="multimodal_agentic_rag_agent",
-        model="gemini-3-flash-preview",
+        model=LiteLlm(
+            model=os.getenv("MODEL"),
+            api_key=os.getenv("API_KEY"),
+            api_base=os.getenv("URL"),
+            custom_llm_provider="openai", 
+        ),
         description="面向多模态 Gemini Embedding 2 工作区的 Agentic RAG 协调器。",
         instruction=instruction2,
         tools=tools,

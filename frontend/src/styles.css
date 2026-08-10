@@ -976,6 +976,202 @@ textarea:focus {
   }
 }
 
+.workspace-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  background: rgba(20, 21, 15, 0.82);
+}
+
+.workspace-tabs button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.workspace-tabs button.active {
+  background: rgba(245, 78, 0, 0.16);
+  color: var(--ink);
+}
+
+.workspace-chat {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-areas: "sidebar main";
+  max-width: none;
+}
+
+.conversation-sidebar,
+.chat-panel {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-sidebar {
+  grid-area: sidebar;
+}
+
+.chat-panel {
+  grid-area: main;
+}
+
+.conversation-sidebar-heading,
+.chat-panel-heading {
+  flex: 0 0 auto;
+}
+
+.conversation-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.conversation-sidebar-status,
+.conversation-sidebar-empty {
+  padding: 12px 4px;
+}
+
+.conversation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.conversation-select {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 2px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: rgba(20, 21, 15, 0.72);
+  color: var(--body);
+  text-align: left;
+}
+
+.conversation-select svg {
+  grid-row: 1 / span 2;
+  color: var(--muted);
+}
+
+.conversation-row.active .conversation-select {
+  border-color: rgba(245, 78, 0, 0.55);
+  background: rgba(245, 78, 0, 0.08);
+}
+
+.conversation-title {
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-meta {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--muted-soft);
+}
+
+.conversation-delete {
+  flex: 0 0 auto;
+}
+
+.chat-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 12px;
+}
+
+.chat-empty {
+  margin: auto 0;
+}
+
+.chat-bubble {
+  max-width: min(760px, 92%);
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: rgba(20, 21, 15, 0.82);
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  border-color: rgba(245, 78, 0, 0.35);
+  background: rgba(245, 78, 0, 0.08);
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+}
+
+.chat-bubble.streaming {
+  border-color: rgba(159, 187, 224, 0.35);
+}
+
+.chat-bubble header {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.message-placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.chat-error {
+  flex: 0 0 auto;
+}
+
+.chat-composer {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.chat-input {
+  min-height: 88px;
+}
+
+.chat-send {
+  min-width: 108px;
+}
+
 @media (max-width: 1239px) {
   .workspace {
     height: calc(100vh - 72px);
@@ -985,6 +1181,12 @@ textarea:focus {
       "stage right"
       "left right";
     padding: 18px 18px 40px;
+  }
+
+  .workspace-chat {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    grid-template-rows: 1fr;
+    grid-template-areas: "sidebar main";
   }
 
   .space-stage {
@@ -1022,6 +1224,16 @@ textarea:focus {
       "stage"
       "right"
       "left";
+  }
+
+  .workspace-chat {
+    height: calc(100vh - 72px);
+    overflow: hidden;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "sidebar"
+      "main";
   }
 
   .left-rail,

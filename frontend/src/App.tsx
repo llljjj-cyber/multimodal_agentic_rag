@@ -14,7 +14,6 @@ import {
   Plus,
   RadioTower,
   Search,
-  Send,
   Sparkles,
   Trash2,
   Upload,
@@ -23,7 +22,18 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8897";
+import {
+  apiFetch,
+  deleteConversation,
+  listConversations,
+  listMessages,
+  streamChat,
+  type ChatMessage,
+  type Conversation,
+} from "./api";
+import ChatPanel from "./components/ChatPanel";
+import ConversationSidebar from "./components/ConversationSidebar";
+
 const TOKEN_KEY = "mar_access_token";
 const USER_KEY = "mar_username";
 
@@ -79,19 +89,6 @@ type AskResponse = {
   space: SpaceSnapshot;
 };
 
-function formatApiDetail(detail: unknown, fallback: string) {
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) => {
-        if (item && typeof item === "object" && "msg" in item) return String((item as { msg: unknown }).msg);
-        return String(item);
-      })
-      .join("；");
-  }
-  return fallback;
-}
-
 function normalizeSource(raw: Record<string, unknown>): RackSource {
   const meta = (raw.metadata ?? raw.metadata_ ?? {}) as Record<string, unknown>;
   const created = raw.created_at;
@@ -128,66 +125,6 @@ function normalizeSpace(data: unknown): SpaceSnapshot {
     model: String(payload.model ?? ""),
     projection: payload.projection as SpaceSnapshot["projection"],
   };
-}
-
-async function apiFetch(path: string, token: string | null, init: RequestInit = {}) {
-  const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  const res = await fetch(`${API}${path}`, { ...init, headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const error = new Error(formatApiDetail((data as { detail?: unknown }).detail, `请求失败（${res.status}）`));
-    (error as Error & { status?: number }).status = res.status;
-    throw error;
-  }
-  return data;
-}
-
-/** POST /chat/stream：SSE 文本流；首包可能是 {"conv_id": n} */
-async function streamChat(
-  token: string,
-  body: { message: string; conv_id?: number | null },
-  onEvent: (payload: string) => void,
-) {
-  const headers = new Headers({
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  });
-  const res = await fetch(`${API}/chat/stream`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    const error = new Error(formatApiDetail((data as { detail?: unknown }).detail, `请求失败（${res.status}）`));
-    (error as Error & { status?: number }).status = res.status;
-    throw error;
-  }
-  if (!res.body) throw new Error("浏览器不支持流式响应。");
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split("\n\n");
-    buffer = chunks.pop() ?? "";
-    for (const chunk of chunks) {
-      const line = chunk
-        .split("\n")
-        .map((row) => row.trim())
-        .find((row) => row.startsWith("data:"));
-      if (!line) continue;
-      const payload = line.slice(5).trimStart();
-      if (payload) onEvent(payload);
-    }
-  }
 }
 
 const modalityIcon: Record<Modality, React.ElementType> = {
@@ -693,6 +630,7 @@ function Workspace({
   username: string;
   onLogout: () => void;
 }) {
+  const [workspaceView, setWorkspaceView] = useState<"chat" | "library">("chat");
   const [space, setSpace] = useState<SpaceSnapshot | null>(null);
   const [tab, setTab] = useState<"text" | "url" | "file" | "path">("text");
   const [title, setTitle] = useState(DEFAULT_TITLE);
@@ -706,14 +644,23 @@ function Workspace({
   const [trace, setTrace] = useState<AskResponse["trace"]>([]);
   const [queryPoint, setQueryPoint] = useState<RackPoint | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<RackPoint | null>(null);
-  const [convId, setConvId] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [streamingText, setStreamingText] = useState("");
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [deletingConvId, setDeletingConvId] = useState<number | null>(null);
   const [isAddingSource, setIsAddingSource] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [removingSourceId, setRemovingSourceId] = useState<string | null>(null);
   const [sourceStatus, setSourceStatus] = useState("");
   const [sourceError, setSourceError] = useState("");
   const [qaStatus, setQaStatus] = useState("");
   const [qaError, setQaError] = useState("");
+  const [chatError, setChatError] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -733,15 +680,58 @@ function Workspace({
   );
 
   const refreshSpace = useCallback(async () => {
-    const data = await apiFetch("/space", token);
+    const data = await apiFetch<{ space?: unknown }>("/space", token);
     setSpace(normalizeSpace(data));
   }, [token]);
+
+  const refreshConversations = useCallback(async () => {
+    setConversationsLoading(true);
+    try {
+      const rows = await listConversations(token);
+      setConversations(rows);
+    } catch (error) {
+      handleAuthFailure(error);
+      setChatError(error instanceof Error ? error.message : "加载会话失败。");
+    } finally {
+      setConversationsLoading(false);
+    }
+  }, [token, handleAuthFailure]);
+
+  const loadMessages = useCallback(
+    async (convId: number) => {
+      setMessagesLoading(true);
+      setChatError("");
+      try {
+        const rows = await listMessages(token, convId);
+        setMessages(rows);
+      } catch (error) {
+        handleAuthFailure(error);
+        setChatError(error instanceof Error ? error.message : "加载消息失败。");
+        setMessages([]);
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [token, handleAuthFailure],
+  );
 
   useEffect(() => {
     refreshSpace().catch((error) => {
       handleAuthFailure(error);
     });
   }, [refreshSpace, handleAuthFailure]);
+
+  useEffect(() => {
+    refreshConversations().catch(() => undefined);
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    if (activeConvId == null) {
+      setMessages([]);
+      return;
+    }
+    loadMessages(activeConvId).catch(() => undefined);
+  }, [activeConvId, loadMessages]);
 
   async function addSource() {
     setIsAddingSource(true);
@@ -826,7 +816,7 @@ function Workspace({
     setRemovingSourceId(source.id);
     setSourceError("");
     try {
-      const data = await apiFetch(`/sources/${source.id}`, token, { method: "DELETE" });
+      const data = await apiFetch<{ space?: unknown }>(`/sources/${source.id}`, token, { method: "DELETE" });
       setSpace(normalizeSpace(data.space));
       setMatches((current) => current.filter((match) => match.source_id !== source.id));
       if (selectedPoint?.source_id === source.id) setSelectedPoint(null);
@@ -840,51 +830,94 @@ function Workspace({
     }
   }
 
-  /** 主路径：多轮对话，走 /chat/stream + conv_id */
-  async function askQuestion() {
-    if (!question.trim()) return;
-    setIsAsking(true);
-    setQaError("");
-    setQaStatus(convId ? `继续会话 #${convId}…` : "正在创建会话并流式回答…");
-    setAnswer("");
-    setMatches([]);
-    setTrace([]);
-    setQueryPoint(null);
+  async function sendChatMessage() {
+    const text = chatDraft.trim();
+    if (!text || isSending) return;
+
+    setIsSending(true);
+    setChatError("");
+    setStreamingText("");
+    setChatDraft("");
+
+    const optimisticUser: ChatMessage = {
+      id: -Date.now(),
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((current) => [...current, optimisticUser]);
+
+    let nextConvId = activeConvId;
+    let assembled = "";
+
     try {
-      let nextConvId = convId;
-      let assembled = "";
-      await streamChat(
-        token,
-        { message: question.trim(), conv_id: convId },
-        (payload) => {
-          if (payload === "[DONE]") return;
-          if (payload.startsWith("{")) {
-            try {
-              const meta = JSON.parse(payload) as { conv_id?: number };
-              if (typeof meta.conv_id === "number") {
-                nextConvId = meta.conv_id;
-                setConvId(meta.conv_id);
-                return;
-              }
-            } catch {
-              // 非 meta JSON，当作普通文本 chunk
-            }
-          }
-          assembled += payload;
-          setAnswer(assembled);
-        },
-      );
-      setQaStatus(nextConvId ? `会话 #${nextConvId} 已更新。` : "回答完成。");
-      await refreshSpace().catch(() => undefined);
+      await streamChat(token, { message: text, conv_id: activeConvId }, (payload) => {
+        if (payload.kind === "conv_id") {
+          nextConvId = payload.convId;
+          setActiveConvId(payload.convId);
+          return;
+        }
+        if (payload.kind === "text") {
+          assembled += payload.text;
+          setStreamingText(assembled);
+          return;
+        }
+      });
+
+      if (nextConvId != null) {
+        await loadMessages(nextConvId);
+        await refreshConversations();
+      }
     } catch (error) {
       handleAuthFailure(error);
-      setQaError(error instanceof Error ? error.message : "出错了，请稍后重试。");
+      setChatError(error instanceof Error ? error.message : "发送失败，请稍后重试。");
+      if (activeConvId != null) {
+        await loadMessages(activeConvId).catch(() => undefined);
+      } else {
+        setMessages((current) => current.filter((item) => item.id !== optimisticUser.id));
+      }
     } finally {
-      setIsAsking(false);
+      setStreamingText("");
+      setIsSending(false);
     }
   }
 
-  /** 保留：一次性 /ask（含引用、轨迹、空间点） */
+  function startNewChat() {
+    setActiveConvId(null);
+    setMessages([]);
+    setChatDraft("");
+    setStreamingText("");
+    setChatError("");
+  }
+
+  async function handleSelectConversation(convId: number) {
+    setActiveConvId(convId);
+    setChatError("");
+  }
+
+  async function handleDeleteConversation(convId: number) {
+    const target = conversations.find((item) => item.id === convId);
+    const label = target?.title || `会话 #${convId}`;
+    const confirmed = window.confirm(`确定删除「${label}」吗？`);
+    if (!confirmed) return;
+
+    setDeletingConvId(convId);
+    setChatError("");
+    try {
+      await deleteConversation(token, convId);
+      if (activeConvId === convId) {
+        startNewChat();
+      }
+      await refreshConversations();
+    } catch (error) {
+      handleAuthFailure(error);
+      setChatError(error instanceof Error ? error.message : "删除会话失败。");
+    } finally {
+      setDeletingConvId(null);
+    }
+  }
+
+  /** 资料库调试：一次性 /ask（含引用、轨迹、空间点） */
   async function askOnce() {
     if (!question.trim()) return;
     setIsAsking(true);
@@ -910,16 +943,6 @@ function Workspace({
     }
   }
 
-  function startNewConversation() {
-    setConvId(null);
-    setAnswer("");
-    setMatches([]);
-    setTrace([]);
-    setQueryPoint(null);
-    setQaStatus("已开始新对话，下次提问将创建新会话。");
-    setQaError("");
-  }
-
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -933,6 +956,26 @@ function Workspace({
           </div>
         </div>
         <div className="status-strip">
+          <div className="workspace-tabs" role="tablist" aria-label="工作区视图">
+            <button
+              type="button"
+              role="tab"
+              className={workspaceView === "chat" ? "active" : ""}
+              aria-selected={workspaceView === "chat"}
+              onClick={() => setWorkspaceView("chat")}
+            >
+              <MessageSquare size={14} /> 聊天
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={workspaceView === "library" ? "active" : ""}
+              aria-selected={workspaceView === "library"}
+              onClick={() => setWorkspaceView("library")}
+            >
+              <FolderOpen size={14} /> 资料库
+            </button>
+          </div>
           <span><RadioTower size={14} /> {provider}</span>
           <span><Box size={14} /> {pointCount} 个点</span>
           <span><Activity size={14} /> {sourceCount} 份资料</span>
@@ -943,6 +986,29 @@ function Workspace({
         </div>
       </header>
 
+      {workspaceView === "chat" ? (
+        <section className="workspace workspace-chat">
+          <ConversationSidebar
+            conversations={conversations}
+            activeId={activeConvId}
+            loading={conversationsLoading}
+            deletingId={deletingConvId}
+            onSelect={handleSelectConversation}
+            onNew={startNewChat}
+            onDelete={handleDeleteConversation}
+          />
+          <ChatPanel
+            messages={messages}
+            draft={chatDraft}
+            streamingText={streamingText}
+            isSending={isSending || messagesLoading}
+            error={chatError}
+            convId={activeConvId}
+            onDraftChange={setChatDraft}
+            onSend={sendChatMessage}
+          />
+        </section>
+      ) : (
       <section className="workspace">
         <aside className="left-rail">
           <section className="panel source-list">
@@ -1092,25 +1158,16 @@ function Workspace({
           <section className="panel qa-panel">
             <div className="panel-heading">
               <div>
-                <h2>问答</h2>
-                <p>
-                  流式对话走 /chat/stream
-                  {convId != null ? ` · 当前会话 #${convId}` : " · 新会话"}
-                </p>
+                <h2>问答调试</h2>
+                <p>一次性 /ask · 含引用与轨迹</p>
               </div>
               <Bot size={18} />
             </div>
             <label className="field-label">问题</label>
             <textarea className="question-box" value={question} onChange={(event) => setQuestion(event.target.value)} aria-label="问题" />
             <div className="qa-actions" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button className="primary-button" onClick={askQuestion} disabled={isAsking}>
-                {isAsking ? <Loader2 className="spin" size={16} /> : <Send size={16} />} 流式提问
-              </button>
-              <button className="primary-button" onClick={askOnce} disabled={isAsking} title="一次性 /ask，含引用与轨迹">
+              <button className="primary-button" onClick={askOnce} disabled={isAsking}>
                 {isAsking ? <Loader2 className="spin" size={16} /> : <Search size={16} />} 一次性问答
-              </button>
-              <button className="icon-button" onClick={startNewConversation} disabled={isAsking} title="新开对话（清空 conv_id）" aria-label="新对话">
-                <Plus size={16} />
               </button>
             </div>
             {(qaStatus || qaError) && (
@@ -1177,6 +1234,7 @@ function Workspace({
           </section>
         </aside>
       </section>
+      )}
     </main>
   );
 }
