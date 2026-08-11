@@ -10,21 +10,21 @@ from fastapi import HTTPException
 from google.genai import types as genai_types
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app_state import RAG_STORE
+from services.rag.app_state import RAG_STORE
 from database import SESSION_SERVICE
 
 SETUP_ERROR = ""
 try:
     from google.adk.agents.run_config import RunConfig, StreamingMode
     from google.adk.runners import Runner
-    from agentic_rag_agent.agent import build_agent
+    from services.agentic_rag_agent.agent import build_agent
 
     ADK_AVAILABLE = bool(os.getenv("GOOGLE_API_KEY"))
 except Exception:
-    Runner = None  # type: ignore
-    RunConfig = None  # type: ignore
-    StreamingMode = None  # type: ignore
-    build_agent = None  # type: ignore
+    Runner = None  
+    RunConfig = None  
+    StreamingMode = None  
+    build_agent = None  
     ADK_AVAILABLE = False
     SETUP_ERROR = "无法导入 Google ADK。请安装依赖并设置 GOOGLE_API_KEY。"
 
@@ -39,7 +39,7 @@ def _event_text(event: Any) -> str:
         return ""
     return "".join(
         getattr(part, "text", None) or ""
-        for part in event.content.parts
+        for part in event.content.parts if not getattr(part, "thought", False)
     )
 
 
@@ -105,7 +105,8 @@ def build_runner(
         })
         return space
 
-    agent = build_agent([retrieve_relevant_context, inspect_embedding_space])
+    # agent = build_agent([retrieve_relevant_context, inspect_embedding_space])
+    agent = build_agent()
     runner = Runner(
         agent=agent,
         app_name=APP_NAME,
@@ -142,6 +143,7 @@ async def stream_agent(
         yield event
 
 
+
 async def run_agent_once(
     *,
     question: str,
@@ -169,3 +171,7 @@ async def run_agent_once(
     if not final_text.strip():
         raise HTTPException(502, "Agent 未生成有效回答。")
     return final_text, session.id, state.last_retrieval, state.trace
+
+
+
+

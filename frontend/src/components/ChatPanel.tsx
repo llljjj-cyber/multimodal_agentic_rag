@@ -1,6 +1,7 @@
-import { Loader2, Send } from "lucide-react";
-import { FormEvent, useEffect, useRef } from "react";
+import { ChevronDown, Loader2, Send } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../api";
+import { cleanAnswerText, splitThinkingContent } from "../messageFormat";
 
 type Props = {
   messages: ChatMessage[];
@@ -13,17 +14,7 @@ type Props = {
   onSend: () => void;
 };
 
-function cleanAnswerText(value: string) {
-  return value
-    .replace(/\[[a-f0-9]{8,12}-\d+\]/gi, "")
-    .replace(/\*\*/g, "")
-    .replace(/^\s*\*\s+/gm, "- ")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function MessageBody({ content }: { content: string }) {
+function AnswerBlocks({ content }: { content: string }) {
   const cleaned = cleanAnswerText(content);
   if (!cleaned) {
     return <p className="message-placeholder">…</p>;
@@ -55,6 +46,80 @@ function MessageBody({ content }: { content: string }) {
           return <p key={`${blockIndex}-${lineIndex}`}>{line}</p>;
         });
       })}
+    </div>
+  );
+}
+
+function ThinkingBlock({
+  thinking,
+  openByDefault = false,
+  streaming = false,
+}: {
+  thinking: string;
+  openByDefault?: boolean;
+  streaming?: boolean;
+}) {
+  const [open, setOpen] = useState(openByDefault || streaming);
+
+  useEffect(() => {
+    if (streaming) setOpen(true);
+  }, [streaming]);
+
+  if (!thinking.trim() && !streaming) return null;
+
+  return (
+    <div className={`thinking-block ${streaming ? "streaming" : ""}`}>
+      <button
+        type="button"
+        className="thinking-toggle"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <ChevronDown size={14} className={open ? "open" : ""} />
+        <span>{streaming ? "正在思考" : "思维过程"}</span>
+        {streaming && <Loader2 className="spin" size={12} />}
+      </button>
+      {open && (
+        <div className="thinking-body">
+          {thinking.trim() ? (
+            <pre>{thinking}</pre>
+          ) : (
+            <p className="message-placeholder">模型正在推理…</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageBody({
+  content,
+  streaming = false,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
+  const { thinking, answer, thinkingOpen } = splitThinkingContent(content);
+  const showThinking = Boolean(thinking) || (streaming && thinkingOpen);
+  const showAnswer = Boolean(answer);
+  const onlyThinking = streaming && thinkingOpen && !answer;
+
+  return (
+    <div className="message-body">
+      {showThinking && (
+        <ThinkingBlock
+          thinking={thinking}
+          openByDefault={streaming && thinkingOpen}
+          streaming={onlyThinking || (streaming && thinkingOpen)}
+        />
+      )}
+      {showAnswer ? (
+        <AnswerBlocks content={answer} />
+      ) : streaming && !showThinking ? (
+        <p className="message-placeholder">
+          <Loader2 className="spin" size={14} /> 正在生成…
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -105,7 +170,11 @@ export default function ChatPanel({
             className={`chat-bubble ${message.role === "user" ? "user" : "assistant"}`}
           >
             <header>{message.role === "user" ? "你" : "助手"}</header>
-            <MessageBody content={message.content} />
+            {message.role === "assistant" ? (
+              <MessageBody content={message.content} />
+            ) : (
+              <AnswerBlocks content={message.content} />
+            )}
           </article>
         ))}
 
@@ -113,7 +182,7 @@ export default function ChatPanel({
           <article className="chat-bubble assistant streaming">
             <header>助手</header>
             {streamingText ? (
-              <MessageBody content={streamingText} />
+              <MessageBody content={streamingText} streaming />
             ) : (
               <p className="message-placeholder">
                 <Loader2 className="spin" size={14} /> 正在思考…

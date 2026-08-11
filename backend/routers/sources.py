@@ -1,6 +1,7 @@
 
 import ipaddress
 import os
+from pathlib import Path
 import socket
 from urllib.parse import urlparse
 
@@ -8,12 +9,14 @@ import httpx
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services import store
+
 load_dotenv()
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from starlette.concurrency import run_in_threadpool
 
-from app_state import RAG_STORE
+from services.rag.app_state import RAG_STORE
 from database import get_db
 from schemas import SourceOut, TextSourceRequest, UrlSourceRequest, User
 from dependencies import get_current_user, get_file_path
@@ -55,11 +58,12 @@ async def add_text_source(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)):
     try:
-        source = await RAG_STORE.add_text_source(db, user.id, req.title, req.text, req.modality)
+        source = await store.add_text_source(db, user.id, req.title, req.text, req.modality)
         snapshot = await RAG_STORE.snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"source": SourceOut.model_validate(source), "space": snapshot}
+
 
 @router.post("/url")
 async def add_url_source(
@@ -75,7 +79,7 @@ async def add_url_source(
             response.raise_for_status()
         text = _extract_text_from_html(response.text)
         title = req.title or url.replace("https://", "").replace("http://", "")[:80]
-        source = await RAG_STORE.add_text_source(db, user.id, title, text[:12000], "url")
+        source = await store.add_text_source(db, user.id, title, text[:12000], "url")
         snapshot = await RAG_STORE.snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, f"无法入库该网址：{exc}") from exc
@@ -84,47 +88,25 @@ async def add_url_source(
 
 @router.post("/file")
 async def add_file_source(
-    file: UploadFile = File(...),
-    title: str = Form(""),
-    notes: str = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    file_path: str = Depends(get_file_path)
 ):
-    data = await file.read()
-    if len(data) > 120 * 1024 * 1024:
-        raise HTTPException(400, "文件过大。演示环境请保持在 120 MB 以内。")
+    modality = Path(file_path).suffix[1:]
     try:
-        source = await RAG_STORE.add_file_source(
-            db=db,
-            user_id=user.id,
-            title=title or file.filename or "上传资料",
-            data=data,
-            mime_type=file.content_type or "application/octet-stream",
-            notes=notes,
-        )
+        source = await store.add_file_source(db, user.id, file_path, modality=modality)
         snapshot = await RAG_STORE.snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"source": SourceOut.model_validate(source), "space": snapshot}
 
-@router.post("/file_inner", tags=["文件"])
-async def add_file(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-    file_path: str = Depends(get_file_path)):
-    try:
-        sources = await RAG_STORE.add_source_inner(db, user.id, file_path)
-        snapshot = await RAG_STORE.snapshot(db, user.id)
-    except Exception as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return {"sources": [SourceOut.model_validate(source) for source in sources], "space": snapshot}
 
 @router.delete("/{source_id}")
 async def delete_source(
     source_id: str, 
     db: AsyncSession=Depends(get_db),
     user: User=Depends(get_current_user)):
-    removed = await RAG_STORE.remove_source(db, user.id, source_id)
+    removed = await store.remove_source(db, user.id, source_id)
     if not removed:
         raise HTTPException(404, "未找到该资料。")
     snapshot = await RAG_STORE.snapshot(db, user.id)

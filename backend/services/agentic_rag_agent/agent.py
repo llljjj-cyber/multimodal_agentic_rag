@@ -23,12 +23,15 @@ instruction1 = """
 
 instruction2 = """
 你是一个人资料助手。当用户向你提出查询请求时，按以下操作，请始终使用简体中文回答。
+不要显示自己的思考过程。
 
 查询时：
 1. 先使用 inspect_embedding_space 了解当前资料库状态。
 2. 回答前必须使用 retrieve_relevant_context，并基于用户原问题检索。
 3. 根据会话历史和检索信息回答用户。
 """
+instruction3 = """你是一个聊天助手，禁止使用任何定义的工具函数。"""
+
 def build_agent(tools: list | None = None) -> Agent:
     tools = tools or []
     return Agent(
@@ -38,9 +41,12 @@ def build_agent(tools: list | None = None) -> Agent:
             api_key=os.getenv("API_KEY"),
             api_base=os.getenv("URL"),
             custom_llm_provider="openai", 
+             model_kwargs={
+        "extra_body": {"thinking": {"type": "enabled"}}, 
+    },
         ),
         description="面向多模态 Gemini Embedding 2 工作区的 Agentic RAG 协调器。",
-        instruction=instruction2,
+        instruction=instruction3,
         tools=tools,
         generate_content_config=genai_types.GenerateContentConfig(
             temperature=0.25,

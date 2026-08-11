@@ -24,7 +24,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 async def init_db() -> None:
-    from models import ChunkModel, SourceModel, UserModel, ConversationModel, MessageModel  # noqa: F401
+    from models import ChunkModel, SourceModel, UserModel, ConversationModel, MessageModel, ParentDocModel  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))

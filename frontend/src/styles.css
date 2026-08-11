@@ -1150,6 +1150,64 @@ textarea:focus {
   color: var(--muted);
 }
 
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.thinking-block {
+  border: 1px solid var(--hairline-soft);
+  border-radius: 10px;
+  background: rgba(8, 9, 6, 0.45);
+  overflow: hidden;
+}
+
+.thinking-block.streaming {
+  border-color: rgba(159, 187, 224, 0.35);
+}
+
+.thinking-toggle {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-align: left;
+}
+
+.thinking-toggle svg {
+  transition: transform 0.15s ease;
+  flex: 0 0 auto;
+}
+
+.thinking-toggle svg.open {
+  transform: rotate(180deg);
+}
+
+.thinking-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.thinking-body pre {
+  margin: 8px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .chat-error {
   flex: 0 0 auto;
 }

@@ -9,7 +9,7 @@ from database import get_db
 from dependencies import get_current_user
 from models import ConversationModel
 from schemas import ChatRequest, User
-from services.agent_runtime import (
+from services.agentic_rag_agent.agent_runtime import (
     _event_text,
     build_runner,
     ensure_adk_session,
@@ -52,12 +52,10 @@ async def stream_chat(
     async def event_generator():
         yield f"data: {json.dumps({'conv_id': conv.id}, ensure_ascii=False)}\n\n"
 
-        # 1) 绑定 / 创建 ADK Session
         session = await ensure_adk_session(user.id, conv.adk_session_id)
         if conv.adk_session_id != session.id:
             await crud.update_conversation_session(db, conv, session.id)
 
-        # 2) 本轮 Runner + 工具
         runner, _state = build_runner(db, user.id, top_k=DEFAULT_TOP_K)
 
         # 3) SSE：只推 partial 增量；无 partial 时用最终文本兜底
@@ -80,6 +78,7 @@ async def stream_chat(
                 saw_partial = True
                 parts.append(text)
                 yield f"data: {text}\n\n"
+
             else:
                 final_text = text
                 if not saw_partial:

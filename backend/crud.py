@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
-from models import ChunkModel, ConversationModel, MessageModel, SourceModel, Base, UserModel
+from models import ChunkModel, ConversationModel, MessageModel, ParentDocModel, SourceModel, Base, UserModel
 
 
 async def create_chunk(
@@ -17,10 +17,12 @@ async def create_chunk(
     text: str,
     vector: list[float],
     metadata_: dict[str, Any] = None,
+    parent_id: str = None
 ) -> ChunkModel:
     chunk = ChunkModel(
         id=id,
         source_id=source_id,
+        parent_id = parent_id,
         title=title,
         modality=modality,
         chunk_index=chunk_index,
@@ -31,6 +33,26 @@ async def create_chunk(
     db.add(chunk)
     return chunk
 
+
+async def create_parent_doc(
+    db: AsyncSession,
+    id: str,
+    source_id: str,
+    title: str,
+    text: str,
+    child_count: int,
+    metadata: dict | None = None,
+) -> ParentDocModel:
+    parent_doc = ParentDocModel(
+        id=id,
+        source_id=source_id,
+        title=title,
+        text=text,
+        child_count=child_count,
+        metadata_=metadata
+    )
+    db.add(parent_doc)
+    return parent_doc
 
 async def create_source(
     db: AsyncSession,

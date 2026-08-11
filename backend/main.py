@@ -11,14 +11,14 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from app_state import RAG_STORE
+from services.rag.app_state import RAG_STORE
 from database import get_db, init_db
 from schemas import AskRequest, User
 from routers.auth import router as auth_router
 from routers.sources import router as sources_router
 from routers.conversation import router as conversation_router
 from routers.chat import router as chat_router
-from services.agent_runtime import run_agent_once
+from services.agentic_rag_agent.agent_runtime import run_agent_once
 from dependencies import get_current_user
 
 

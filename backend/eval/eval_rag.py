@@ -29,7 +29,7 @@ load_dotenv()
 
 import crud
 from database import async_session
-from app_state import RAG_STORE
+from services.rag.app_state import RAG_STORE
 
 
 DEFAULT_GOLDEN = Path(__file__).resolve().parent / "eval" / "golden.example.json"

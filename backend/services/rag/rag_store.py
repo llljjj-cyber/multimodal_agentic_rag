@@ -37,15 +37,6 @@ MODALITY_COLORS = {
 }
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if not norm_a or not norm_b:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
 def _clean_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text or "").strip()
     return text

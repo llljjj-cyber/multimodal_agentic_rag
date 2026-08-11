@@ -5,7 +5,7 @@ import crud
 from database import SESSION_SERVICE, get_db
 from dependencies import get_current_user
 from schemas import Conversation, Message, User
-from services.agent_runtime import APP_NAME
+from services.agentic_rag_agent.agent_runtime import APP_NAME
 
 
 router = APIRouter(prefix="/conversations", tags=["会话"])
