@@ -832,6 +832,20 @@ function Workspace({
         }
       });
 
+      if (assembled.trim()) {
+        const optimisticAssistant: ChatMessage = {
+          id: -(Date.now() + 1),
+          role: "assistant",
+          content: assembled,
+          created_at: new Date().toISOString(),
+        };
+        setStreamingText("");
+        setMessages((current) => [...current, optimisticAssistant]);
+      } else {
+        setStreamingText("");
+      }
+      setIsSending(false);
+
       if (nextConvId != null) {
         await loadMessages(nextConvId);
         await refreshConversations();

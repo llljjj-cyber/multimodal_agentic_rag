@@ -1,7 +1,7 @@
 import { ChevronDown, Loader2, Send } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../api";
-import { cleanAnswerText, splitThinkingContent } from "../messageFormat";
+import { cleanAnswerText, parseMarkdownTableBlock, splitThinkingContent } from "../messageFormat";
 
 type Props = {
   messages: ChatMessage[];
@@ -14,6 +14,31 @@ type Props = {
   onSend: () => void;
 };
 
+function MarkdownTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="answer-table-wrap">
+      <table className="answer-table">
+        <thead>
+          <tr>
+            {headers.map((cell, index) => (
+              <th key={index}>{cell}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function AnswerBlocks({ content }: { content: string }) {
   const cleaned = cleanAnswerText(content);
   if (!cleaned) {
@@ -25,6 +50,10 @@ function AnswerBlocks({ content }: { content: string }) {
     <div className="answer-content">
       {blocks.map((block, blockIndex) => {
         const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+        const table = parseMarkdownTableBlock(lines);
+        if (table) {
+          return <MarkdownTable key={blockIndex} headers={table.headers} rows={table.rows} />;
+        }
         const isList = lines.length > 1 && lines.every((line) => line.startsWith("- "));
         if (isList) {
           return (
@@ -178,16 +207,19 @@ export default function ChatPanel({
           </article>
         ))}
 
-        {(isSending || streamingText) && (
+        {(isSending && !streamingText) && (
           <article className="chat-bubble assistant streaming">
             <header>助手</header>
-            {streamingText ? (
-              <MessageBody content={streamingText} streaming />
-            ) : (
-              <p className="message-placeholder">
-                <Loader2 className="spin" size={14} /> 正在思考…
-              </p>
-            )}
+            <p className="message-placeholder">
+              <Loader2 className="spin" size={14} /> 正在思考…
+            </p>
+          </article>
+        )}
+
+        {streamingText && (
+          <article className="chat-bubble assistant streaming">
+            <header>助手</header>
+            <MessageBody content={streamingText} streaming />
           </article>
         )}
       </div>

@@ -57,3 +57,26 @@ export function cleanAnswerText(value: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/** 解析 Markdown 管道表格块；非表格返回 null */
+export function parseMarkdownTableBlock(lines: string[]): { headers: string[]; rows: string[][] } | null {
+  const trimmed = lines.map((line) => line.trim()).filter(Boolean);
+  if (trimmed.length < 2 || !trimmed.every((line) => line.includes("|"))) {
+    return null;
+  }
+
+  const parseRow = (line: string) =>
+    line
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((cell) => cell.trim());
+
+  const dataLines = trimmed.filter((line) => !/^\|[\s\-:|]+\|$/.test(line));
+  if (dataLines.length < 1) return null;
+
+  return {
+    headers: parseRow(dataLines[0]),
+    rows: dataLines.slice(1).map(parseRow),
+  };
+}

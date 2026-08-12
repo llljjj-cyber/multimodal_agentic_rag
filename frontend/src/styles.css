@@ -832,6 +832,35 @@ textarea:focus {
   gap: 7px;
 }
 
+.answer-table-wrap {
+  overflow-x: auto;
+}
+
+.answer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.answer-table th,
+.answer-table td {
+  border: 1px solid var(--line, #d8dee9);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.answer-table th {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.answer-table td {
+  color: var(--body);
+}
+
 .answer-box svg {
   color: var(--primary);
   margin-top: 2px;
