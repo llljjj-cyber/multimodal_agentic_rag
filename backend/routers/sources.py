@@ -4,12 +4,13 @@ import os
 from pathlib import Path
 import socket
 from urllib.parse import urlparse
+import uuid
 
 import httpx
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services import store
+from services.rag import store
 
 load_dotenv()
 from bs4 import BeautifulSoup
@@ -19,7 +20,10 @@ from starlette.concurrency import run_in_threadpool
 from services.rag.app_state import RAG_STORE
 from database import get_db
 from schemas import SourceOut, TextSourceRequest, UrlSourceRequest, User
-from dependencies import get_current_user, get_file_path
+from dependencies import get_current_user
+
+
+ALLOWED_SUFFIX = {".pdf", ".md", ".txt"}
 
 def _extract_text_from_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
@@ -90,14 +94,35 @@ async def add_url_source(
 async def add_file_source(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    file_path: str = Depends(get_file_path)
+    file: UploadFile = File(...),
+    title: str | None = Form(None),
 ):
-    modality = Path(file_path).suffix[1:]
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_SUFFIX:
+        raise HTTPException(400, f"仅支持 {', '.join(ALLOWED_SUFFIX)}")
+    
+    upload_dir = Path(__file__).resolve().parent.parent / "services" / "rag" / "tempo" / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex}{suffix}"
+    saved_path = upload_dir / safe_name
+
     try:
-        source = await store.add_file_source(db, user.id, file_path, modality=modality)
+        content = await file.read()
+        if not content:
+            raise HTTPException(400, "文件为空")
+        if len(content) > 50 * 1024 * 1024:
+            raise HTTPException(400, "文件大小上限为 50 MB，请上传更小的文件。")
+        saved_path.write_bytes(content)
+        modality = suffix[1:]  # pdf / md / txt
+        source = await store.add_file_source(
+            db, user.id, str(saved_path), modality=modality, title=title
+        )
         snapshot = await RAG_STORE.snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
+    finally:
+        saved_path.unlink(missing_ok=True)
+
     return {"source": SourceOut.model_validate(source), "space": snapshot}
 
 

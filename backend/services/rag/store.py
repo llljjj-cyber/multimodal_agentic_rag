@@ -16,15 +16,10 @@ import crud
 from models import SourceModel
 
 load_dotenv()
-# POST /sources/text      # 粘贴/手写笔记
-# POST /sources/url       # 网页抓取
-# POST /sources/upload    # 单文件：pdf / md / txt / png
-# GET  /sources           # 列表
-# DELETE /sources/{id}
 
-CHUNK_SIZE = 600          # 中文约 300–400 字，英文更长一点
-CHUNK_OVERLAP = 120       # ~20% overlap
-MIN_CHUNK_CHARS = 30      # 太短的碎片丢掉（可选）
+CHUNK_SIZE = 600         
+CHUNK_OVERLAP = 120       
+MIN_CHUNK_CHARS = 30      
 PARENT_CATEGORIES = {"Title"}
 CHILD_CATEGORIES = {"NarrativeText", "Text", "Table", "ListItem", "UncategorizedText"}
 SKIP_PATTERNS = ("Wikipedia",)
@@ -298,7 +293,7 @@ def load_txt_file(file_path: str) -> list[Document]:
     return docs
 
 # markdown, pdf 文件添加
-async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modality: Literal["md", "pdf", "txt"]):
+async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modality: Literal["md", "pdf", "txt"], title: str | None = None):
     converted = False
     if modality.lower() == "txt":
         docs = load_txt_file(file_path)
@@ -307,7 +302,7 @@ async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modali
         source = await add_text_source(
             db=db,
             user_id=user_id,
-            title=Path(file_path).stem,
+            title=title or Path(file_path).stem,
             modality="txt",
             file=True,
             docs=docs
@@ -328,7 +323,7 @@ async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modali
             source = await crud.create_source(
                 db=db,
                 user_id=user_id,
-                title=md_path.stem,
+                title=title or md_path.stem,
                 modality=modality,
                 summary=parent_docs[0].page_content[:200],
             )
