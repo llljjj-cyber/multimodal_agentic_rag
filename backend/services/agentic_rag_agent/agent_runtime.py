@@ -10,7 +10,10 @@ from fastapi import HTTPException
 from google.genai import types as genai_types
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.rag.app_state import RAG_STORE
+
+from services.rag.retriever import search
+from services.rag.retriever import retrieval_payload
+from services.rag.space import space_tool
 from database import SESSION_SERVICE
 
 SETUP_ERROR = ""
@@ -84,17 +87,17 @@ def build_runner(
     state = AgentRunState()
 
     async def retrieve_relevant_context(query: str, top_k: int = top_k) -> dict:
-        results = await RAG_STORE.search(db, user_id, query, top_k)
+        results = await search(db, user_id, query, top_k)
         state.last_retrieval = results
         state.trace.append({
             "agent": "检索工具",
             "status": "complete",
             "detail": f"已检索到 {len(results['matches'])} 条资料（query={query!r}）",
         })
-        return RAG_STORE.retrieval_payload(results)
+        return retrieval_payload(results)
 
     async def inspect_embedding_space() -> dict:
-        space = await RAG_STORE.space_tool(db, user_id)
+        space = await space_tool(db, user_id)
         state.trace.append({
             "agent": "空间检查",
             "status": "complete",
@@ -105,8 +108,8 @@ def build_runner(
         })
         return space
 
-    # agent = build_agent([retrieve_relevant_context, inspect_embedding_space])
-    agent = build_agent()
+    agent = build_agent([retrieve_relevant_context, inspect_embedding_space])
+    # agent = build_agent()
     runner = Runner(
         agent=agent,
         app_name=APP_NAME,

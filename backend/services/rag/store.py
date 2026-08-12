@@ -4,18 +4,16 @@ import re
 from typing import Literal 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from FlagEmbedding import BGEM3FlagModel
-from dotenv import load_dotenv
+
 from langchain_core.documents import Document
 from langchain_community.document_loaders import UnstructuredMarkdownLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_mineru import MinerULoader
 
-
 import crud
 from models import SourceModel
+from services.rag.embedding import _doc_embedding
 
-load_dotenv()
 
 CHUNK_SIZE = 600         
 CHUNK_OVERLAP = 120       
@@ -24,42 +22,6 @@ PARENT_CATEGORIES = {"Title"}
 CHILD_CATEGORIES = {"NarrativeText", "Text", "Table", "ListItem", "UncategorizedText"}
 SKIP_PATTERNS = ("Wikipedia",)
 
-# Embedding 函数
-_model = None
-def get_model():
-    global _model
-    if _model is None:
-        _model = BGEM3FlagModel(os.getenv("BGE_MODEL_PATH"),  use_fp16=True)
-    return _model
-
-def _doc_embedding(
-    documents: list[Document], 
-    model: BGEM3FlagModel | None = None,
-    batch_size: int = 16, 
-    dense: bool = True, 
-    sparse: bool = True, 
-    colbert: bool = True
-    ) -> list[Document]:
-    if model is None:
-        model = get_model()
-
-    for i in range(0, len(documents), batch_size):
-        batch = documents[i: i + batch_size]
-        embeddings = model.encode(
-            [doc.page_content for doc in batch],
-            batch_size=batch_size,
-            max_length=2000,
-            return_dense=dense,
-            return_sparse=sparse,
-            return_colbert_vecs=colbert)
-        for j, doc in enumerate(batch):
-            if dense:
-                doc.metadata["dense"] = embeddings["dense_vecs"][j].tolist()
-            if sparse:
-                doc.metadata["sparse"] = embeddings["lexical_weights"][j]
-            if colbert:
-                doc.metadata["colbert"] = embeddings["colbert_vecs"][j]
-    return documents
 
 # 入库 text 路径
 def _normalize_text(text: str) -> str:

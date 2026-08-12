@@ -37,7 +37,7 @@ import ConversationSidebar from "./components/ConversationSidebar";
 const TOKEN_KEY = "mar_access_token";
 const USER_KEY = "mar_username";
 
-type Modality = "text" | "url" | "pdf" | "image" | "audio" | "video" | "query";
+type Modality = "text" | "url" | "pdf" | "txt" | "md" | "image" | "audio" | "video" | "query";
 
 type RackPoint = {
   id: string;
@@ -120,9 +120,9 @@ function normalizeSpace(data: unknown): SpaceSnapshot {
     sources: sourcesRaw.map((item) => normalizeSource((item ?? {}) as Record<string, unknown>)),
     points: (Array.isArray(payload.points) ? payload.points : []) as RackPoint[],
     events: (Array.isArray(payload.events) ? payload.events : []) as Array<Record<string, unknown>>,
-    provider: String(payload.provider ?? "未知"),
-    dimensions: typeof payload.dimensions === "number" ? payload.dimensions : 768,
-    model: String(payload.model ?? ""),
+    provider: String(payload.provider ?? payload.embedding_model ?? "未知"),
+    dimensions: typeof payload.dimensions === "number" ? payload.dimensions : 1024,
+    model: String(payload.model ?? payload.embedding_model ?? ""),
     projection: payload.projection as SpaceSnapshot["projection"],
   };
 }
@@ -131,6 +131,8 @@ const modalityIcon: Record<Modality, React.ElementType> = {
   text: FileText,
   url: Link,
   pdf: FileText,
+  txt: FileText,
+  md: FileText,
   image: Image,
   audio: AudioLines,
   video: Video,
@@ -143,10 +145,10 @@ const DEFAULT_TITLE = "Gemini Embedding 2 学习笔记";
 
 const modalityLabels: Array<{ key: string; label: string }> = [
   { key: "text", label: "文本" },
-  { key: "image", label: "图片" },
-  { key: "audio", label: "音频" },
-  { key: "video", label: "视频" },
+  { key: "url", label: "网页" },
   { key: "pdf", label: "PDF" },
+  { key: "txt", label: "TXT" },
+  { key: "md", label: "Markdown" },
   { key: "query", label: "查询" },
 ];
 
@@ -154,6 +156,8 @@ const modalityName: Record<string, string> = {
   text: "文本",
   url: "网页",
   pdf: "PDF",
+  txt: "TXT",
+  md: "Markdown",
   image: "图片",
   audio: "音频",
   video: "视频",
@@ -632,12 +636,10 @@ function Workspace({
 }) {
   const [workspaceView, setWorkspaceView] = useState<"chat" | "library">("chat");
   const [space, setSpace] = useState<SpaceSnapshot | null>(null);
-  const [tab, setTab] = useState<"text" | "url" | "file" | "path">("text");
+  const [tab, setTab] = useState<"text" | "url" | "file">("text");
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [text, setText] = useState(sampleText);
   const [url, setUrl] = useState("https://developers.googleblog.com/building-with-gemini-embedding-2/");
-  const [notes, setNotes] = useState("上传到个人资料助手的资料备注。");
-  const [filePath, setFilePath] = useState("");
   const [question, setQuestion] = useState("Gemini Embedding 2 如何帮助跨模态的 Agentic RAG？");
   const [answer, setAnswer] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
@@ -736,17 +738,10 @@ function Workspace({
   async function addSource() {
     setIsAddingSource(true);
     setSourceError("");
-    setSourceStatus(
-      tab === "file"
-        ? "正在上传并嵌入媒体…"
-        : tab === "path"
-          ? "正在解析本地 PDF 并嵌入…"
-          : "正在嵌入资料…",
-    );
+    setSourceStatus(tab === "file" ? "正在上传并解析文件…" : "正在嵌入资料…");
     try {
       let data: {
         source?: Record<string, unknown>;
-        sources?: Array<Record<string, unknown>>;
         space?: unknown;
       };
       if (tab === "text") {
@@ -759,18 +754,6 @@ function Workspace({
           method: "POST",
           body: JSON.stringify({ url, title: title || undefined }),
         });
-      } else if (tab === "path") {
-        const trimmedPath = filePath.trim();
-        if (!trimmedPath) {
-          setSourceStatus("");
-          setSourceError("请填写后端可访问的文件夹路径（内含 PDF）。");
-          return;
-        }
-        data = await apiFetch(
-          `/sources/file_inner?file_path=${encodeURIComponent(trimmedPath)}`,
-          token,
-          { method: "POST" },
-        );
       } else {
         const file = fileRef.current?.files?.[0];
         if (!file) {
@@ -781,26 +764,11 @@ function Workspace({
         const form = new FormData();
         form.append("title", title || file.name);
         form.append("file", file);
-        form.append("notes", notes);
         data = await apiFetch("/sources/file", token, { method: "POST", body: form });
       }
 
       setSpace(normalizeSpace(data.space));
-      if (tab === "path") {
-        const added = Array.isArray(data.sources) ? data.sources : [];
-        const preview = added
-          .slice(0, 3)
-          .map((item) => String(item.title || "资料"))
-          .join("、");
-        const more = added.length > 3 ? " 等" : "";
-        setSourceStatus(
-          added.length
-            ? `已入库 ${added.length} 份 PDF${preview ? `：${preview}${more}` : ""}。`
-            : "未入库任何 PDF。",
-        );
-      } else {
-        setSourceStatus(`「${data.source?.title || "资料"}」已嵌入向量空间。`);
-      }
+      setSourceStatus(`「${data.source?.title || "资料"}」已嵌入向量空间。`);
     } catch (error) {
       handleAuthFailure(error);
       setSourceError(error instanceof Error ? error.message : "资料入库失败。");
@@ -1043,15 +1011,10 @@ function Workspace({
               <button className={tab === "text" ? "active" : ""} onClick={() => setTab("text")}><FileText size={14} />文本</button>
               <button className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}><Link size={14} />链接</button>
               <button className={tab === "file" ? "active" : ""} onClick={() => setTab("file")}><Upload size={14} />上传</button>
-              <button className={tab === "path" ? "active" : ""} onClick={() => setTab("path")}><FolderOpen size={14} />路径</button>
             </div>
 
-            {tab !== "path" && (
-              <>
-                <label className="field-label">标题</label>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="资料标题" />
-              </>
-            )}
+            <label className="field-label">标题</label>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="资料标题" />
 
             {tab === "text" && (
               <>
@@ -1073,7 +1036,7 @@ function Workspace({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".txt,.md,.pdf,image/*,audio/*,video/*"
+                  accept=".txt,.md,.pdf"
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
                     setSelectedFile(file);
@@ -1082,34 +1045,18 @@ function Workspace({
                 />
                 {selectedFile && (
                   <div className="file-preview">
-                    <Video size={15} />
+                    <FileText size={15} />
                     <span>{selectedFile.name}</span>
                     <strong>{selectedFile.type || "文件"} · {formatBytes(selectedFile.size)}</strong>
                   </div>
                 )}
-                <label className="field-label">备注</label>
-                <textarea value={notes} onChange={(event) => setNotes(event.target.value)} aria-label="文件备注" />
-              </>
-            )}
-
-            {tab === "path" && (
-              <>
-                <label className="field-label">文件夹路径</label>
-                <input
-                  value={filePath}
-                  onChange={(event) => setFilePath(event.target.value)}
-                  placeholder="例如 C:\Users\LJ\Desktop\数学资料"
-                  aria-label="本地 PDF 文件夹路径"
-                />
-                <p className="field-hint">
-                  调用 /sources/file_inner：路径须是后端机器可访问的文件夹，会递归解析其中全部 PDF，每个文件入库为一份资料。
-                </p>
+                <p className="field-hint">支持 PDF、Markdown、TXT，单文件最大 50 MB。</p>
               </>
             )}
 
             <button className="primary-button" onClick={addSource} disabled={isAddingSource}>
               {isAddingSource ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-              {tab === "path" ? "解析并入库" : "添加资料"}
+              添加资料
             </button>
             {(sourceStatus || sourceError) && (
               <div className={`inline-status ${sourceError ? "error" : "success"}`} role="status">

@@ -11,7 +11,6 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from services.rag.app_state import RAG_STORE
 from database import get_db, init_db
 from schemas import AskRequest, User
 from routers.auth import router as auth_router
@@ -20,6 +19,7 @@ from routers.conversation import router as conversation_router
 from routers.chat import router as chat_router
 from services.agentic_rag_agent.agent_runtime import run_agent_once
 from dependencies import get_current_user
+from services.rag.space import snapshot
 
 
 @asynccontextmanager
@@ -51,7 +51,7 @@ app.add_middleware(
 async def space(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)):
-    return await RAG_STORE.snapshot(db, user.id)
+    return await snapshot(db, user.id)
 
 
 @app.post("/ask")

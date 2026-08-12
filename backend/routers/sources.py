@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from starlette.concurrency import run_in_threadpool
 
-from services.rag.app_state import RAG_STORE
+from services.rag.space import snapshot as get_space_snapshot
 from database import get_db
 from schemas import SourceOut, TextSourceRequest, UrlSourceRequest, User
 from dependencies import get_current_user
@@ -63,10 +63,10 @@ async def add_text_source(
     user: User = Depends(get_current_user)):
     try:
         source = await store.add_text_source(db, user.id, req.title, req.text, req.modality)
-        snapshot = await RAG_STORE.snapshot(db, user.id)
+        space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"source": SourceOut.model_validate(source), "space": snapshot}
+    return {"source": SourceOut.model_validate(source), "space": space}
 
 
 @router.post("/url")
@@ -84,10 +84,10 @@ async def add_url_source(
         text = _extract_text_from_html(response.text)
         title = req.title or url.replace("https://", "").replace("http://", "")[:80]
         source = await store.add_text_source(db, user.id, title, text[:12000], "url")
-        snapshot = await RAG_STORE.snapshot(db, user.id)
+        space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, f"无法入库该网址：{exc}") from exc
-    return {"source": SourceOut.model_validate(source), "space": snapshot}
+    return {"source": SourceOut.model_validate(source), "space": space}
 
 
 @router.post("/file")
@@ -117,13 +117,13 @@ async def add_file_source(
         source = await store.add_file_source(
             db, user.id, str(saved_path), modality=modality, title=title
         )
-        snapshot = await RAG_STORE.snapshot(db, user.id)
+        space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
     finally:
         saved_path.unlink(missing_ok=True)
 
-    return {"source": SourceOut.model_validate(source), "space": snapshot}
+    return {"source": SourceOut.model_validate(source), "space": space}
 
 
 @router.delete("/{source_id}")
@@ -134,5 +134,5 @@ async def delete_source(
     removed = await store.remove_source(db, user.id, source_id)
     if not removed:
         raise HTTPException(404, "未找到该资料。")
-    snapshot = await RAG_STORE.snapshot(db, user.id)
-    return {"deleted": source_id, "space": snapshot}
+    space = await get_space_snapshot(db, user.id)
+    return {"deleted": source_id, "space": space}

@@ -29,7 +29,7 @@ load_dotenv()
 
 import crud
 from database import async_session
-from services.rag.app_state import RAG_STORE
+from services.rag.retriever import search_chunks
 
 
 DEFAULT_GOLDEN = Path(__file__).resolve().parent / "eval" / "golden.example.json"
@@ -90,7 +90,7 @@ async def evaluate_retrieval(
                 results.append(CaseResult(question="", title_hit=False, keyword_hit=False, error="空问题"))
                 continue
             try:
-                retrieval = await RAG_STORE.search_chunks(db, user_id, question, top_k)
+                retrieval = await search_chunks(db, user_id, question, top_k)
                 matches = retrieval.get("matches") or []
                 expected_title = str(case.get("expected_source_title") or "")
                 keywords = [str(k) for k in (case.get("expected_keywords") or []) if str(k).strip()]
@@ -169,7 +169,7 @@ async def run_ragas(
             reference = str(case.get("reference_answer") or "").strip()
             if not question or not reference:
                 continue
-            retrieval = await RAG_STORE.search_chunks(db, user_id, question, top_k)
+            retrieval = await search_chunks(db, user_id, question, top_k)
             contexts = [str(m.get("text") or "") for m in (retrieval.get("matches") or []) if m.get("text")]
             if not contexts:
                 continue
