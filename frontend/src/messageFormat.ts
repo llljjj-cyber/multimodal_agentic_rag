@@ -1,15 +1,6 @@
-/**
- * DeepSeek / 推理模型常见会把思维链和正式回复混在同一段文本里。
- * 支持：
- * - <think>...</think>
- * - <thinking>...</thinking>
- * - 流式未闭合的开标签
- */
-
 export type SplitAnswer = {
   thinking: string;
   answer: string;
-  /** 思维链标签已开始但尚未闭合（流式中） */
   thinkingOpen: boolean;
 };
 
@@ -48,17 +39,19 @@ export function splitThinkingContent(raw: string): SplitAnswer {
   };
 }
 
-export function cleanAnswerText(value: string) {
-  return value
+export function cleanAnswerText(value: string, opts?: { keepBold?: boolean }) {
+  let text = value
     .replace(/\[[a-f0-9]{8,12}-\d+\]/gi, "")
-    .replace(/\*\*/g, "")
     .replace(/^\s*\*\s+/gm, "- ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  if (!opts?.keepBold) {
+    text = text.replace(/\*\*/g, "");
+  }
+  return text;
 }
 
-/** 解析 Markdown 管道表格块；非表格返回 null */
 export function parseMarkdownTableBlock(lines: string[]): { headers: string[]; rows: string[][] } | null {
   const trimmed = lines.map((line) => line.trim()).filter(Boolean);
   if (trimmed.length < 2 || !trimmed.every((line) => line.includes("|"))) {

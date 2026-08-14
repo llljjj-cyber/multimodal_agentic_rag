@@ -45,9 +45,9 @@ class SourceModel(Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    modality: Mapped[str] = mapped_column(String(32), nullable=False)  # text/url/pdf/image/audio/video
+    modality: Mapped[str] = mapped_column(String(32), nullable=False)  # text/url/pdf/md/txt/image
     summary: Mapped[str] = mapped_column(Text, default="")
-    file_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    saved_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -6,6 +6,14 @@ export type Conversation = {
   created_at: string;
 };
 
+export type SourceMeta = {
+  id: string;
+  title: string;
+  modality: string;
+  summary?: string;
+  created_at?: string;
+};
+
 export type ChatMessage = {
   id: number;
   role: "user" | "assistant";
@@ -62,12 +70,37 @@ export async function deleteConversation(token: string, convId: number): Promise
   await apiFetch(`/conversations/${convId}`, token, { method: "DELETE" });
 }
 
+export async function deleteSource(token: string, sourceId: string): Promise<void> {
+  await apiFetch(`/sources/${sourceId}`, token, { method: "DELETE" });
+}
+
+export async function getSource(token: string, sourceId: string): Promise<SourceMeta> {
+  const data = await apiFetch<{ source: SourceMeta }>(`/sources/${sourceId}`, token);
+  return data.source;
+}
+
+export async function fetchSourceFile(token: string, sourceId: string): Promise<Blob> {
+  const res = await fetch(`${API}/sources/${sourceId}/file`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(
+      formatApiDetail((data as { detail?: unknown }).detail, `无法读取文件（${res.status}）`),
+    );
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
+  }
+  return res.blob();
+}
+
+export const READABLE_MODALITIES = new Set(["pdf", "md", "txt"]);
+
 export type StreamPayload =
   | { kind: "conv_id"; convId: number }
   | { kind: "text"; text: string }
   | { kind: "done" };
 
-/** 解析 POST /chat/stream 的 SSE data 行 */
 export function parseStreamPayload(raw: string): StreamPayload | null {
   const payload = raw.trim();
   if (!payload) return null;
@@ -85,7 +118,6 @@ export function parseStreamPayload(raw: string): StreamPayload | null {
   return { kind: "text", text: payload };
 }
 
-/** POST /chat/stream：首包 {"conv_id": n}，随后文本块，最后 [DONE] */
 export async function streamChat(
   token: string,
   body: { message: string; conv_id?: number | null },

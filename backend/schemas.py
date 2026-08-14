@@ -41,7 +41,6 @@ class SourceOut(BaseModel):
     title: str
     modality: str
     summary: str
-    file_path: str | None
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         validation_alias="metadata_",

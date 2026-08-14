@@ -5,19 +5,37 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .mypy_cache/
+*.egg-info/
+htmlcov/
+.coverage
+coverage/
 
-# 密钥和环境（千万不要提交）
+# 密钥和环境
 .env
 .env.*
 !.env.example
-backend/.env
 
 # 数据库本地数据
 pgdata/
 
+# 用户上传 & PDF 解析临时文件（保留目录结构）
+backend/services/rag/tempo/**
+!backend/services/rag/tempo/.gitkeep
+!backend/services/rag/tempo/uploads/
+!backend/services/rag/tempo/uploads/.gitkeep
+!backend/services/rag/tempo/md-uploads/
+!backend/services/rag/tempo/md-uploads/.gitkeep
+
 # Node 前端
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+
+# 本地模型（BGE 等）
+models/
+*.pt
+*.bin
 
 # IDE / 系统
 .vscode/
@@ -25,3 +43,5 @@ frontend/dist/
 *.log
 .DS_Store
 Thumbs.db
+*.swp
+*~

@@ -61,7 +61,7 @@ async def create_source(
     title: str,
     modality: str,
     summary: str,
-    file_path: str | None = None,
+    saved_path: str | None = None,
     metadata_: dict[str, Any] | None = None,
 ) -> SourceModel:
     source = SourceModel(
@@ -69,7 +69,7 @@ async def create_source(
         title=title,
         modality=modality,
         summary=summary,
-        file_path=file_path,
+        saved_path=saved_path,
         metadata_=metadata_ or {},
     )
     db.add(source)

@@ -34,7 +34,7 @@ app = FastAPI(
 
 allowed_origins = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5177,http://127.0.0.1:5177").split(",")
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5177,http://127.0.0.1:5177,http://localhost:5178,http://127.0.0.1:5178,http://localhost:5179,http://127.0.0.1:5179,http://localhost:5180,http://127.0.0.1:5180").split(",")
     if origin.strip()
 ]
 app.add_middleware(
@@ -53,36 +53,6 @@ async def space(
     user: User = Depends(get_current_user)):
     return await snapshot(db, user.id)
 
-
-@app.post("/ask")
-async def ask(
-    req: AskRequest, 
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)):
-    if not req.question.strip():
-        raise HTTPException(400, "问题不能为空。")
-
-    answer, session_id, retrieval, trace = await run_agent_once(
-    question=req.question.strip(),
-    db=db,
-    user_id=user.id,
-    session_id=req.session_id,
-    top_k=req.top_k,
-    )
-    retrieval = retrieval or {}
-    trace.append({
-    "agent": "回答合成",
-    "status": "complete",
-    "detail": "已生成有依据的回答；引用在界面单独展示",
-})
-    return {
-        "answer": answer,
-        "matches": retrieval.get("matches", []),
-        "session_id": session_id,
-        "query_point": retrieval.get("query_point"),
-        "trace": trace,
-        "space": retrieval.get("space")
-    }
 
 app.include_router(auth_router)
 app.include_router(sources_router)

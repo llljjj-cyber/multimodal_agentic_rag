@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 import re
-from typing import Literal 
+from typing import Literal
+import uuid 
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,6 +66,7 @@ async def add_text_source(
     title: str, 
     text: str | None = None, 
     modality: str = "text", 
+    saved_path: str | None = None,
     file: bool = False, 
     docs: list[Document] | None = None) -> SourceModel:
     if not file:
@@ -76,7 +78,7 @@ async def add_text_source(
             title=title.strip() or f"{modality.title()} source", # 注意
             modality=modality,
             summary=_normalize_text(text)[:220] if not file else docs[0].page_content[:220] ,
-            file_path=None,
+            saved_path=saved_path,
         )
 
         embed_docs = _doc_embedding(docs, sparse=False, colbert=False)
@@ -106,9 +108,9 @@ async def add_text_source(
 def _pdf_to_md(file_path: str) -> Path:
     loader = MinerULoader(source=file_path, mode="precision", token=os.getenv("MINERU_TOKEN"))
     docs = loader.load()
-    tempo = Path(__file__).parent / "tempo"
+    tempo = Path(__file__).parent / "tempo" / "md-uploads"
     tempo.mkdir(parents=True, exist_ok=True)
-    path = tempo / f"{Path(file_path).stem}.md"
+    path = tempo / f"{Path(file_path).stem}_{uuid.uuid4().hex[:8]}.md"
     with open(str(path), "w", encoding="utf-8") as f:
         for doc in docs:
             f.write(f"{doc.page_content}")
@@ -255,39 +257,39 @@ def load_txt_file(file_path: str) -> list[Document]:
     return docs
 
 # markdown, pdf 文件添加
-async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modality: Literal["md", "pdf", "txt"], title: str | None = None):
-    converted = False
+async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modality: Literal["md", "pdf", "txt"], title: str | None = None):
     if modality.lower() == "txt":
-        docs = load_txt_file(file_path)
+        docs = load_txt_file(saved_path)
         if not docs:
             raise ValueError("文件解析后为空")
         source = await add_text_source(
             db=db,
             user_id=user_id,
-            title=title or Path(file_path).stem,
+            title=title or "未命名", #
             modality="txt",
             file=True,
-            docs=docs
+            docs=docs,
+            saved_path=saved_path
         )
     else:
         if modality.lower() == "pdf":
-            converted = True
-            md_path = _pdf_to_md(file_path)
+            md_path = str(_pdf_to_md(saved_path))
         elif modality.lower() == "md":
-            md_path = Path(file_path)
+            md_path = None
         else:
             raise ValueError("不支持该类型文件")
         try:
-            parent_docs, child_docs = _parent_child_doc_from_md(md_path)
+            parent_docs, child_docs = _parent_child_doc_from_md(md_path if md_path else saved_path)
             if not parent_docs or not child_docs:
                 raise ValueError("文件解析后为空")
 
             source = await crud.create_source(
                 db=db,
                 user_id=user_id,
-                title=title or md_path.stem,
+                title=title or (Path(md_path).stem if md_path else Path(saved_path).stem),
                 modality=modality,
                 summary=parent_docs[0].page_content[:200],
+                saved_path=saved_path,
             )
 
             for p in parent_docs:
@@ -321,10 +323,15 @@ async def add_file_source(db: AsyncSession, user_id: str, file_path: str, modali
             await db.rollback()
             raise
         finally:
-            if converted:
+            if md_path:
                 Path(md_path).unlink(missing_ok=True)
     return source
             
+async def get_source(db: AsyncSession, user_id: str, source_id: str) -> SourceModel | None:
+    source = await crud.get_source_by_id(db, source_id)
+    if not source or source.user_id != user_id:
+        return None
+    return source
 
 # 删除 source
 async def remove_source(db: AsyncSession, user_id: str, source_id: str) -> bool:

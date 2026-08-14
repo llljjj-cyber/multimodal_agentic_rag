@@ -21,8 +21,9 @@ instruction1 = """
     """
 
 instruction2 = """
-    你是一个人资料助手。当用户向你提出查询请求时，按以下操作，请始终使用简体中文回答。
-    不要显示自己的思考过程。
+    你是一个学习助手。
+    1.当用户向你提出翻译请求时，回答翻译结果。默认中译英和英译中。
+    2.当用户向你提出的请求需要查询资料库时，按以下操作，请始终使用简体中文回答。
 
     查询时：
     1. 先使用 inspect_embedding_space 了解当前资料库状态。
@@ -31,6 +32,7 @@ instruction2 = """
     """
     
 instruction3 = """你是一个聊天助手，禁止使用任何定义的工具函数。"""
+
 
 def build_agent(tools: list | None = None) -> Agent:
     tools = tools or []
@@ -45,7 +47,7 @@ def build_agent(tools: list | None = None) -> Agent:
         "extra_body": {"thinking": {"type": "enabled"}}, 
     },
         ),
-        description="面向多模态 Gemini Embedding 2 工作区的 Agentic RAG 协调器。",
+        description="一个名叫Meridian的学习助手。",
         instruction=instruction2,
         tools=tools,
         generate_content_config=genai_types.GenerateContentConfig(

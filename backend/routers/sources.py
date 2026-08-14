@@ -6,6 +6,7 @@ import socket
 from urllib.parse import urlparse
 import uuid
 
+from fastapi.responses import FileResponse
 import httpx
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,6 +99,7 @@ async def add_file_source(
     title: str | None = Form(None),
 ):
     suffix = Path(file.filename or "").suffix.lower()
+    title = title or file.filename or ""
     if suffix not in ALLOWED_SUFFIX:
         raise HTTPException(400, f"仅支持 {', '.join(ALLOWED_SUFFIX)}")
     
@@ -119,11 +121,43 @@ async def add_file_source(
         )
         space = await get_space_snapshot(db, user.id)
     except Exception as exc:
+        Path(saved_path).unlink(missing_ok=True)
         raise HTTPException(400, str(exc)) from exc
-    finally:
-        saved_path.unlink(missing_ok=True)
-
+    
     return {"source": SourceOut.model_validate(source), "space": space}
+
+
+@router.get("/{source_id}")
+async def get_source(
+    source_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    source = await store.get_source(db, user.id, source_id)
+    if not source:
+        raise HTTPException(404, "未找到该资料。")
+    return {"source": SourceOut.model_validate(source)}
+
+
+@router.get("/{source_id}/file")
+async def get_source_file(
+    source_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    source = await store.get_source(db, user.id, source_id)
+    if not source:
+        raise HTTPException(404, "未找到该资料。")
+    if source.modality not in ["pdf", "md", "txt"]:
+        raise HTTPException(400, "不支持该类型文件。")
+    if not source.saved_path:
+        raise HTTPException(404, "未找到该文件路径。")
+    if not Path(source.saved_path).exists():
+        raise HTTPException(404, "未找到该文件。")
+    ext = Path(source.saved_path).suffix
+    filename = f"{source.title}{ext}"
+    media_type = "text/markdown" if ext == ".md" else "application/pdf" if ext == ".pdf" else "text/plain"
+    return FileResponse(source.saved_path, filename=filename, media_type=media_type)
 
 
 @router.delete("/{source_id}")
@@ -131,6 +165,11 @@ async def delete_source(
     source_id: str, 
     db: AsyncSession=Depends(get_db),
     user: User=Depends(get_current_user)):
+    source = await store.get_source(db, user.id, source_id)
+    if not source:
+        raise HTTPException(404, "未找到该资料。")
+    if source.saved_path:
+        Path(source.saved_path).unlink(missing_ok=True)
     removed = await store.remove_source(db, user.id, source_id)
     if not removed:
         raise HTTPException(404, "未找到该资料。")
