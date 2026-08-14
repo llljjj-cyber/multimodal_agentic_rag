@@ -1,23 +1,21 @@
 import os
 from contextlib import asynccontextmanager
-from typing import Any
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 
 from database import get_db, init_db
-from schemas import AskRequest, User
+from schemas import User
 from routers.auth import router as auth_router
 from routers.sources import router as sources_router
-from routers.conversation import router as conversation_router
+from routers.conversations import router as conversation_router
 from routers.chat import router as chat_router
-from services.agentic_rag_agent.agent_runtime import run_agent_once
 from dependencies import get_current_user
 from services.rag.space import snapshot
 
@@ -34,7 +32,7 @@ app = FastAPI(
 
 allowed_origins = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5177,http://127.0.0.1:5177,http://localhost:5178,http://127.0.0.1:5178,http://localhost:5179,http://127.0.0.1:5179,http://localhost:5180,http://127.0.0.1:5180").split(",")
+    for origin in os.getenv("ALLOWED_ORIGINS").split(",")
     if origin.strip()
 ]
 app.add_middleware(

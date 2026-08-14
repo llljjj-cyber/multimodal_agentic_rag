@@ -1,4 +1,4 @@
-export const API = import.meta.env.VITE_API_URL || "http://localhost:8897";
+export const API = import.meta.env.VITE_API_URL;
 
 export type Conversation = {
   id: number;

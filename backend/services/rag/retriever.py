@@ -1,18 +1,8 @@
-import math
-import os
-import re
-import tempfile
-import time
 import uuid
-from pathlib import Path
 from typing import Any
 
-from google import genai
-from google.genai import types
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas import SourceOut
 import crud
 from models import ChunkModel, SourceModel
 from services.rag.embedding import _text_embedding
@@ -21,9 +11,6 @@ from services.rag.space import snapshot, _source_vectors, _pca_projection
 
 EMBED_MODEL = "bgem3-flag-1024"
 DIMENSIONS = 1024
-CHUNK_WORDS = 170
-CHUNK_OVERLAP = 35
-INLINE_MEDIA_LIMIT_BYTES = 18 * 1024 * 1024
 
 MODALITY_COLORS = {
     "text": "#9fc9a2",
@@ -34,7 +21,7 @@ MODALITY_COLORS = {
 }
 
 
-async def search(db: AsyncSession, user_id: str, query: str, top_k: int = 6) -> dict[str, Any]:
+async def search_sources(db: AsyncSession, user_id: str, query: str, top_k: int = 6) -> dict[str, Any]:
     query_vector = _text_embedding(query).get("dense", None)
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
@@ -87,7 +74,6 @@ async def search_chunks(
     colbert: bool = False
     ) -> dict[str, Any]:
     # 暂时只支持dense向量搜索
-    # 暂不支持父子Chunk搜索
     query_vector = _text_embedding(query, dense=dense, sparse=sparse, colbert=colbert).get("dense", None)
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
@@ -95,13 +81,25 @@ async def search_chunks(
     chunk_matches: list[dict[str, Any]] = []
     if not result:
         return {}
+    parent_ids = set()
     for chunk, distance in result:
+        if chunk.parent_id:
+            if chunk.parent_id in parent_ids:
+                continue
+            parent_ids.add(chunk.parent_id)
+            parent_text = await crud.get_parent_doc_by_id(db, chunk.parent_id)
+            if parent_text:
+                text = parent_text.text
+            else:
+                text = chunk.text
+        else:
+            text = chunk.text
         chunk_matches.append({
             "id": chunk.id,
             "source_id": chunk.source_id,
             "title": chunk.title,
             "modality": chunk.modality,
-            "text": chunk.text,
+            "text": text,
             "score": round(1 - distance, 4),
             "metadata": {"chunk_id": chunk.id, **chunk.metadata_}
         })
@@ -110,6 +108,7 @@ async def search_chunks(
 
 
 def retrieval_payload(results: dict[str, Any]) -> dict[str, Any]:
+    """将检索结果转换为Agentic RAG的payload格式"""
     return {
         "embedding_model": EMBED_MODEL,
         "matches": [

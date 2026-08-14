@@ -1,4 +1,3 @@
-# services/agent_runtime.py
 from __future__ import annotations
 
 import os
@@ -11,7 +10,7 @@ from google.genai import types as genai_types
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from services.rag.retriever import search
+from services.rag.retriever import search_sources, search_chunks
 from services.rag.retriever import retrieval_payload
 from services.rag.space import space_tool
 from database import SESSION_SERVICE
@@ -22,17 +21,17 @@ try:
     from google.adk.runners import Runner
     from services.agentic_rag_agent.agent import build_agent
 
-    ADK_AVAILABLE = bool(os.getenv("GOOGLE_API_KEY"))
+    ADK_AVAILABLE = bool(os.getenv("API_KEY"))
 except Exception:
     Runner = None  
     RunConfig = None  
     StreamingMode = None  
     build_agent = None  
     ADK_AVAILABLE = False
-    SETUP_ERROR = "无法导入 Google ADK。请安装依赖并设置 GOOGLE_API_KEY。"
+    SETUP_ERROR = "无法导入 Google ADK。请安装依赖并设置 API_KEY。"
 
-if not os.getenv("GOOGLE_API_KEY"):
-    SETUP_ERROR = "需要设置 GOOGLE_API_KEY。"
+if not os.getenv("API_KEY"):
+    SETUP_ERROR = "需要设置 API_KEY。"
 
 APP_NAME = "multimodal_agentic_rag"
 
@@ -80,22 +79,31 @@ class AgentRunState:
 def build_runner(
     db: AsyncSession,
     user_id: str,
-    top_k: int = 6,
 ) -> tuple[Any, AgentRunState]:
     """每次请求新建 Agent+Tools+Runner（闭包要带上本次 db/user）。"""
     _require_adk()
     state = AgentRunState()
 
-    async def retrieve_relevant_context(query: str, top_k: int = top_k) -> dict:
-        results = await search(db, user_id, query, top_k)
+    async def retrieve_relevant_sources(query: str, top_k: int = 6) -> dict:
+        results = await search_sources(db, user_id, query, top_k)
         state.last_retrieval = results
         state.trace.append({
-            "agent": "检索工具",
+            "agent": "检索资料,粗颗粒度检索",
             "status": "complete",
             "detail": f"已检索到 {len(results['matches'])} 条资料（query={query!r}）",
         })
         return retrieval_payload(results)
 
+    async def retrieve_relevant_chunks(query: str, top_k: int = 6) -> dict:
+        results = await search_chunks(db, user_id, query, top_k)
+        state.last_retrieval = results
+        state.trace.append({
+            "agent": "检索证据,细颗粒度检索",
+            "status": "complete",
+            "detail": f"已检索到 {len(results['matches'])} 条证据（query={query!r}）",
+        })
+        return retrieval_payload(results)
+        
     async def inspect_embedding_space() -> dict:
         space = await space_tool(db, user_id)
         state.trace.append({
@@ -108,8 +116,7 @@ def build_runner(
         })
         return space
 
-    agent = build_agent([retrieve_relevant_context, inspect_embedding_space])
-    # agent = build_agent()
+    agent = build_agent([retrieve_relevant_sources, retrieve_relevant_chunks, inspect_embedding_space])
     runner = Runner(
         agent=agent,
         app_name=APP_NAME,
@@ -144,37 +151,3 @@ async def stream_agent(
 
     async for event in runner.run_async(**kwargs):
         yield event
-
-
-
-async def run_agent_once(
-    *,
-    question: str,
-    db: AsyncSession,
-    user_id: str,
-    session_id: str | None = None,
-    top_k: int = 6,
-) -> tuple[str, str, dict[str, Any] | None, list[dict]]:
-    """非流式：给 /ask 用。内部消费 stream，只留最终文本。"""
-    session = await ensure_adk_session(user_id, session_id)
-    runner, state = build_runner(db, user_id, top_k)
-
-    final_text = ""
-    async for event in stream_agent(
-        runner=runner,
-        user_id=user_id,
-        session_id=session.id,
-        question=question,
-        streaming=False,  # /ask 不需要 partial
-    ):
-        text = _event_text(event)
-        if text:
-            final_text = text
-
-    if not final_text.strip():
-        raise HTTPException(502, "Agent 未生成有效回答。")
-    return final_text, session.id, state.last_retrieval, state.trace
-
-
-
-

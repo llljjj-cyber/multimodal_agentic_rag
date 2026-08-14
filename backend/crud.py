@@ -155,6 +155,13 @@ async def get_count_by_user_id(
     result = await db.execute(stmt)
     return result.scalar_one()
 
+async def get_parent_doc_by_id(
+    db: AsyncSession,
+    parent_id: str,
+) -> ParentDocModel | None:
+    result = await db.execute(select(ParentDocModel).where(ParentDocModel.id == parent_id))
+    return result.scalar_one_or_none()
+
 
 async def count_by_modality(db: AsyncSession, user_id: str, Model: Base) -> dict[str, int]:
     if Model is SourceModel:
@@ -202,6 +209,7 @@ async def create_user(db: AsyncSession, username: str, hashed_password: str) -> 
     await db.commit()
     await db.refresh(user)
     return user
+
 
 async def create_conversation(
     db: AsyncSession,

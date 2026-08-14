@@ -37,6 +37,9 @@ models/
 *.pt
 *.bin
 
+# 练习
+practice/
+
 # IDE / 系统
 .vscode/
 .idea/

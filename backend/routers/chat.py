@@ -17,8 +17,6 @@ from services.agentic_rag_agent.agent_runtime import (
 )
 
 
-DEFAULT_TOP_K = 6
-
 router = APIRouter(prefix="/chat", tags=["聊天"])
 
 
@@ -56,7 +54,7 @@ async def stream_chat(
         if conv.adk_session_id != session.id:
             await crud.update_conversation_session(db, conv, session.id)
 
-        runner, _state = build_runner(db, user.id, top_k=DEFAULT_TOP_K)
+        runner, _state = build_runner(db, user.id)
 
         # 3) SSE：只推 partial 增量；无 partial 时用最终文本兜底
         parts: list[str] = []
