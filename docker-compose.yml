@@ -1,13 +1,44 @@
 services:
   postgres-db:
     image: pgvector/pgvector:pg16
-    container_name: postgres-db
-    restart: always
+    container_name: Meridian-postgres-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB}       
     volumes:
       - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    image: multimodal_agentic_rag-backend:latest     
+    container_name: Meridian-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+      BGE_MODEL_PATH: /models/bge-m3
+      ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+    volumes:
+      - ${BGE_MODEL_PATH_HOST}:/models/bge-m3:ro
+      - ./backend/services/rag/tempo/uploads:/app/services/rag/tempo/uploads
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: Meridian-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+

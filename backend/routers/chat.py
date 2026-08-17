@@ -56,7 +56,6 @@ async def stream_chat(
 
         runner, _state = build_runner(db, user.id)
 
-        # 3) SSE：只推 partial 增量；无 partial 时用最终文本兜底
         parts: list[str] = []
         saw_partial = False
         final_text = ""
