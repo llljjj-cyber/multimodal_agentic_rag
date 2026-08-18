@@ -8,7 +8,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir torch \
-      --index-url https://download.pytorch.org/whl/cpu \
+      --index-url https://mirrors.aliyun.com/pytorch-wheels/cpu \
       --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple \
  && pip install --no-cache-dir -r requirements.txt
 

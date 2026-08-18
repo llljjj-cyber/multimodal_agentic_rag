@@ -25,10 +25,11 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
       BGE_MODEL_PATH: /models/bge-m3
-      ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      ALLOWED_ORIGINS: http://8.138.96.81:8080,http://localhost:8080,http://127.0.0.1:8080
     volumes:
       - ${BGE_MODEL_PATH_HOST}:/models/bge-m3:ro
       - ./backend/services/rag/tempo/uploads:/app/services/rag/tempo/uploads
+      - ~/nltk_data:/root/nltk_data   
     depends_on:
       postgres-db:
         condition: service_healthy
