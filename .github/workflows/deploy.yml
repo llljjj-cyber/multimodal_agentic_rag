@@ -1,0 +1,24 @@
+name: Deploy to ECS
+
+on:
+  push:
+    branches:
+      - newfrontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ~/multimodal_agentic_rag
+            git pull
+            docker compose up -d --build
+            docker image prune -f
+            docker compose ps
