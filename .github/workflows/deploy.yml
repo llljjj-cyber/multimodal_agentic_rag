@@ -1,4 +1,4 @@
-name: Deploy to ECS
+name: CI and Deploy to ECS
 
 on:
   push:
@@ -6,10 +6,32 @@ on:
       - newfrontend
 
 jobs:
-  deploy:
+  ci:
+    name: Build frontend
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  deploy:
+    name: Deploy over SSH
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to ECS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -19,7 +41,10 @@ jobs:
           script: |
             set -e
             cd ~/multimodal_agentic_rag
-            git pull
+            git fetch origin
+            git reset --hard origin/newfrontend
             docker compose up -d --build
             docker image prune -f
             docker compose ps
+            curl -sf -o /dev/null http://127.0.0.1:8080/
+            echo "Smoke check OK"
