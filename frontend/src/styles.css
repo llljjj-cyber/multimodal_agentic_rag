@@ -1881,6 +1881,19 @@ h1, h2, h3, p { margin: 0; }
   background: var(--accent-soft); border-color: rgba(21, 97, 109, 0.2); color: var(--accent);
 }
 
+.butler-history-edit {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--surface, rgba(255, 255, 255, 0.9));
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
 .butler-muted { font-size: 12px; color: var(--muted); padding: 4px 8px; }
 
 .butler-thread {

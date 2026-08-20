@@ -4,6 +4,7 @@ import {
   apiFetch,
   deleteConversation,
   deleteSource,
+  renameConversation,
   renameSource,
   listConversations,
   listMessages,
@@ -117,6 +118,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [deletingConvId, setDeletingConvId] = useState<number | null>(null);
+  const [renamingConvId, setRenamingConvId] = useState<number | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
@@ -436,6 +438,20 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     setPendingDeleteId(convId);
   }
 
+  async function handleRenameConv(convId: number, title: string) {
+    setRenamingConvId(convId);
+    setError("");
+    try {
+      await renameConversation(token, convId, title);
+      await refreshConversations();
+    } catch (err) {
+      handleAuthFailure(err);
+      setError(err instanceof Error ? err.message : "重命名会话失败");
+    } finally {
+      setRenamingConvId(null);
+    }
+  }
+
   async function confirmDeleteConv() {
     if (pendingDeleteId == null) return;
     const convId = pendingDeleteId;
@@ -602,6 +618,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
           activeConvId={activeConvId}
           conversationsLoading={conversationsLoading}
           deletingConvId={deletingConvId}
+          renamingConvId={renamingConvId}
+          onRenameConv={handleRenameConv}
           onLayoutChange={setLayoutMode}
           onDraftChange={setDraft}
           onSend={sendMessage}
@@ -640,6 +658,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                   activeConvId={activeConvId}
                   conversationsLoading={conversationsLoading}
                   deletingConvId={deletingConvId}
+                  renamingConvId={renamingConvId}
+                  onRenameConv={handleRenameConv}
                   onLayoutChange={setLayoutMode}
                   onDraftChange={setDraft}
                   onSend={sendMessage}

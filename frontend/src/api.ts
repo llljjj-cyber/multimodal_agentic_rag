@@ -70,6 +70,17 @@ export async function deleteConversation(token: string, convId: number): Promise
   await apiFetch(`/conversations/${convId}`, token, { method: "DELETE" });
 }
 
+export async function renameConversation(
+  token: string,
+  convId: number,
+  title: string,
+): Promise<Conversation> {
+  return apiFetch<Conversation>(`/conversations/${convId}/title`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function deleteSource(token: string, sourceId: string): Promise<void> {
   await apiFetch(`/sources/${sourceId}`, token, { method: "DELETE" });
 }

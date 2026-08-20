@@ -32,6 +32,8 @@ type Props = {
   deletingConvId: number | null;
   overlay?: boolean;
   companion?: boolean;
+  renamingConvId?: number | null;
+  onRenameConv: (id: number, title: string) => void | Promise<void>;
   onLayoutChange: (mode: LayoutMode) => void;
   onDraftChange: (value: string) => void;
   onSend: (text?: string) => void;
@@ -54,7 +56,9 @@ export default function ButlerPanel({
   deletingConvId,
   overlay = false,
   companion = false,
+  renamingConvId = null,
   onLayoutChange,
+  onRenameConv,
   onDraftChange,
   onSend,
   onNewChat,
@@ -66,6 +70,16 @@ export default function ButlerPanel({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const collapsed = layoutMode === "warehouse";
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const editInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (editingId != null) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [editingId]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -83,6 +97,25 @@ export default function ButlerPanel({
     event.preventDefault();
     if (!draft.trim() || isSending) return;
     onSend();
+  }
+
+  function startEdit(conv: Conversation) {
+    setEditingId(conv.id);
+    setEditTitle(conv.title || `话题 #${conv.id}`);
+  }
+
+  async function commitEdit() {
+    if (editingId == null) return;
+    const id = editingId;
+    const next = editTitle.trim();
+    const prev = conversations.find((c) => c.id === id)?.title?.trim() || "";
+    setEditingId(null);
+    if (!next || next === prev) return;
+    await onRenameConv(id, next);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
   }
 
   if (collapsed) {
@@ -154,10 +187,55 @@ export default function ButlerPanel({
           ) : (
             conversations.map((conv) => (
               <div key={conv.id} className={`butler-history-row ${conv.id === activeConvId ? "active" : ""}`}>
-                <button type="button" className="butler-history-btn" onClick={() => onSelectConv(conv.id)}>
-                  {conv.title || `话题 #${conv.id}`}
-                </button>
-                <button type="button" className="icon-btn danger" disabled={deletingConvId === conv.id} onClick={() => onDeleteConv(conv.id)}>
+                {editingId === conv.id ? (
+                  <input
+                    ref={editInputRef}
+                    className="butler-history-edit"
+                    value={editTitle}
+                    disabled={renamingConvId === conv.id}
+                    maxLength={100}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={() => {
+                      void commitEdit();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void commitEdit();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelEdit();
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="butler-history-btn"
+                    title={conv.id === activeConvId ? "再次点击可重命名" : undefined}
+                    onClick={() => {
+                      if (conv.id === activeConvId) {
+                        startEdit(conv);
+                      } else {
+                        onSelectConv(conv.id);
+                      }
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      onSelectConv(conv.id);
+                      startEdit(conv);
+                    }}
+                  >
+                    {conv.title || `话题 #${conv.id}`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="icon-btn danger"
+                  disabled={deletingConvId === conv.id || renamingConvId === conv.id}
+                  onClick={() => onDeleteConv(conv.id)}
+                >
                   {deletingConvId === conv.id ? <Loader2 className="spin" size={13} /> : <Trash2 size={13} />}
                 </button>
               </div>

@@ -62,7 +62,7 @@ class Conversation(BaseModel):
     created_at: datetime
 
 class ConvRenameRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=20)
+    title: str = Field(..., min_length=1, max_length=100)
 
 class Message(BaseModel):
     model_config = ConfigDict(from_attributes=True)
