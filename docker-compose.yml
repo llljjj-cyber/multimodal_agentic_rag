@@ -16,8 +16,8 @@ services:
       retries: 10
 
   backend:
+    image: ghcr.io/llljjj-cyber/mar-backend:${IMAGE_TAG:-latest}
     build: ./backend
-    image: multimodal_agentic_rag-backend:latest     
     container_name: Meridian-backend
     restart: unless-stopped
     env_file:
@@ -35,6 +35,7 @@ services:
         condition: service_healthy
 
   frontend:
+    image: ghcr.io/llljjj-cyber/mar-frontend:${IMAGE_TAG:-latest}
     build: ./frontend
     container_name: Meridian-frontend
     restart: unless-stopped
