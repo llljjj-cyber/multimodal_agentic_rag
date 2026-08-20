@@ -4,6 +4,7 @@ import {
   apiFetch,
   deleteConversation,
   deleteSource,
+  renameSource,
   listConversations,
   listMessages,
   READABLE_MODALITIES,
@@ -102,6 +103,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [pendingDeleteSourceId, setPendingDeleteSourceId] = useState<string | null>(null);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<SpacePoint | null>(null);
+  const [renamingSource, setRenamingSource] = useState(false);
   const [readingSource, setReadingSource] = useState<SourceMeta | null>(null);
   const [meridianCompanionOpen, setMeridianCompanionOpen] = useState(true);
   const readingShellRef = useRef<HTMLDivElement | null>(null);
@@ -323,6 +325,30 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
       setError(err instanceof Error ? err.message : "删除失败");
     } finally {
       setDeletingSourceId(null);
+    }
+  }
+
+  async function confirmRenameSource(title: string) {
+    if (!renameTarget) return;
+    setRenamingSource(true);
+    setError("");
+    try {
+      const data = await renameSource(token, renameTarget.source_id, title);
+      if (data.space) {
+        setSpace(normalizeSpace(data.space));
+      } else {
+        await refreshSpace();
+      }
+      setRenameTarget(null);
+    } catch (e) {
+      const err = e as Error & { status?: number };
+      if (err.status === 401) {
+        handleAuthFailure(err);
+        setError(err instanceof Error ? err.message : "重命名失败");
+      }
+      setError(err.message || "重命名失败");
+    } finally {
+      setRenamingSource(false);
     }
   }
 
@@ -684,10 +710,13 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
       <RenameSourceDialog
         open={renameTarget != null}
         currentTitle={renameTarget?.title ?? ""}
-        disabled
-        disabledHint="修改标题需要后端 PATCH /sources/{id} 接口，暂未启用。如需此功能请告知，我可补充后端。"
-        onCancel={() => setRenameTarget(null)}
-        onConfirm={() => setRenameTarget(null)}
+        busy={renamingSource}
+        onCancel={() => {
+          if (!renamingSource) setRenameTarget(null);
+        }}
+        onConfirm={(title) => {
+          void confirmRenameSource(title);
+        }}
       />
     </div>
   );

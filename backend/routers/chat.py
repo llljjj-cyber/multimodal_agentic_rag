@@ -25,9 +25,10 @@ async def _prepare_chat(
     db: AsyncSession,
     user: User,
 ) -> ConversationModel:
-    """产品侧：ensure Conversation + 写入 user Message。历史交给 ADK Session。"""
     if body.conv_id is None:
-        conv = await crud.create_conversation(db, user_id=user.id)
+        raw = body.message.strip().replace("\n", " ")
+        raw = body.message if body.message else "新会话"
+        conv = await crud.create_conversation(db, user_id=user.id, title=raw[:20] + '...' if len(raw) > 20 else raw)
     else:
         conv = await crud.get_conversation(db, body.conv_id)
         if conv is None:

@@ -41,6 +41,14 @@ async def init_db() -> None:
         await conn.execute(
             text(
                 """
+                ALTER TABLE messages
+                ALTER COLUMN content TYPE TEXT
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
                 CREATE INDEX IF NOT EXISTS ix_conversations_adk_session_id
                 ON conversations (adk_session_id)
                 """

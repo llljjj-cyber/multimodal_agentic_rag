@@ -73,9 +73,14 @@ async def create_source(
         metadata_=metadata_ or {},
     )
     db.add(source)
-    await db.flush()  # 关键：生成并拿到 source.id，但还不 commit
+    await db.flush() 
     return source
 
+async def update_source_title(db: AsyncSession, source: SourceModel, title: str) -> SourceModel:
+    source.title = title.strip()
+    await db.commit()
+    await db.refresh(source)
+    return source
 
 async def delete_source(db: AsyncSession, source: SourceModel) -> None:
     await db.delete(source)
@@ -228,6 +233,16 @@ async def create_conversation(
     await db.refresh(conversation)
     return conversation
 
+
+async def update_conversation_title(
+    db: AsyncSession,
+    conv: ConversationModel,
+    title: str,
+) -> ConversationModel:
+    conv.title = title[:100]
+    await db.commit()
+    await db.refresh(conv)
+    return conv
 
 async def get_conversation(
     db: AsyncSession,

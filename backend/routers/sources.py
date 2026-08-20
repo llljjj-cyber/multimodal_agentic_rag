@@ -20,7 +20,8 @@ from starlette.concurrency import run_in_threadpool
 
 from services.rag.space import snapshot as get_space_snapshot
 from database import get_db
-from schemas import SourceOut, TextSourceRequest, UrlSourceRequest, User
+import crud
+from schemas import SourceOut, SourceRenameRequest, TextSourceRequest, UrlSourceRequest, User
 from dependencies import get_current_user
 
 
@@ -159,6 +160,19 @@ async def get_source_file(
     media_type = "text/markdown" if ext == ".md" else "application/pdf" if ext == ".pdf" else "text/plain"
     return FileResponse(source.saved_path, filename=filename, media_type=media_type)
 
+@router.patch("/{source_id}/title")
+async def rename_source(
+    source_id: str,
+    req: SourceRenameRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    source = await store.get_source(db, user.id, source_id)
+    if not source:
+        raise HTTPException(404, "未找到该资料。")
+    source = await crud.update_source_title(db, source, req.title)
+    space = await get_space_snapshot(db, user.id)
+    return {"source": SourceOut.model_validate(source), "space": space}
 
 @router.delete("/{source_id}")
 async def delete_source(

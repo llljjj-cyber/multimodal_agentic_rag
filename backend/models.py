@@ -116,7 +116,7 @@ class MessageModel(Base):
         index=True,
     )
     role: Mapped[str] = mapped_column(String(20))
-    content: Mapped[str] = mapped_column(String(4000))
+    content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

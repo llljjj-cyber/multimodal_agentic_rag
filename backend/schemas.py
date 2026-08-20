@@ -38,7 +38,7 @@ class SourceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    title: str
+    title: str 
     modality: str
     summary: str
     metadata: dict[str, Any] = Field(
@@ -47,18 +47,22 @@ class SourceOut(BaseModel):
     )
     created_at: datetime
 
+class SourceRenameRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 class Conversation(BaseModel):
-    """对外会话视图：不暴露 adk_session_id（内部 Agent 记忆）。"""
-
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     title: str
     created_at: datetime
+
+class ConvRenameRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=20)
 
 class Message(BaseModel):
     model_config = ConfigDict(from_attributes=True)

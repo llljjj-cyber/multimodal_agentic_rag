@@ -74,6 +74,17 @@ export async function deleteSource(token: string, sourceId: string): Promise<voi
   await apiFetch(`/sources/${sourceId}`, token, { method: "DELETE" });
 }
 
+export async function renameSource(
+  token: string,
+  sourceId: string,
+  title: string,
+): Promise<{ source: SourceMeta; space?: unknown }> {
+  return apiFetch(`/sources/${sourceId}/title`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function getSource(token: string, sourceId: string): Promise<SourceMeta> {
   const data = await apiFetch<{ source: SourceMeta }>(`/sources/${sourceId}`, token);
   return data.source;

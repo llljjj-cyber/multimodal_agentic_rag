@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import crud
 from database import SESSION_SERVICE, get_db
 from dependencies import get_current_user
-from schemas import Conversation, Message, User
+from schemas import ConvRenameRequest, Conversation, Message, User
 from services.agentic_rag_agent.agent_runtime import APP_NAME
 
 
@@ -18,6 +18,20 @@ async def list_conversations(
 ):
     return await crud.list_conversations_by_user(db, user.id)
 
+@router.patch("/{conv_id}/title", response_model=Conversation)
+async def rename_conversation(
+    conv_id: int,
+    req: ConvRenameRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await crud.get_conversation(db=db, conv_id=conv_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail=f"会话{conv_id}不存在")
+    if conv.user_id != user.id:
+        raise HTTPException(status_code=403, detail="无权修改此会话")
+    else:
+        return await crud.update_conversation_title(db=db, conv=conv, title=req.title)
 
 @router.get("/{conv_id}/messages", response_model=list[Message])
 async def list_messages(
