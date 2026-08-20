@@ -6,29 +6,42 @@ on:
       - newfrontend
 
 jobs:
-  ci:
+  ci-frontend:
     name: Build frontend
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install and build frontend
         working-directory: frontend
         run: |
           npm ci
           npm run build
 
+
+  ci-backend:
+    name: Build backend image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create CI env files
+        run: |
+          cp .env.example .env
+          cp backend/.env.example backend/.env
+      - name: Build backend Docker image
+        run: docker build -t multimodal_agentic_rag-backend:ci ./backend
+
+
   deploy:
     name: Deploy over SSH
-    needs: ci
+    needs: [ci-frontend, ci-backend]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to ECS
