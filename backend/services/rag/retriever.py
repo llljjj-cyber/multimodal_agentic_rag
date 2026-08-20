@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 import crud
 from models import ChunkModel, SourceModel
@@ -22,12 +23,16 @@ MODALITY_COLORS = {
 
 
 async def search_sources(db: AsyncSession, user_id: str, query: str, top_k: int = 6) -> dict[str, Any]:
-    query_vector = _text_embedding(query).get("dense", None)
+    query_vector = (
+        await run_in_threadpool(_text_embedding, query)
+    ).get("dense", None)
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
     query_id = f"query-{uuid.uuid4().hex[:8]}"
     source_vectors = await _source_vectors(db, user_id)
-    projections = _pca_projection({**source_vectors, query_id: query_vector})
+    projections = await run_in_threadpool(
+        lambda: _pca_projection({**source_vectors, query_id: query_vector})
+    )
     query_point = {
             "id": query_id,
             "source_id": "query",
@@ -74,13 +79,15 @@ async def search_chunks(
     colbert: bool = False
     ) -> dict[str, Any]:
     # 暂时只支持dense向量搜索
-    query_vector = _text_embedding(query, dense=dense, sparse=sparse, colbert=colbert).get("dense", None)
+    query_vector = (await run_in_threadpool(
+        lambda: _text_embedding(query, dense=dense, sparse=sparse, colbert=colbert)
+    )).get("dense", None)
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
     result: list[tuple[ChunkModel, float]] = await crud.search_chunks(db, user_id, query_vector, top_k)
     chunk_matches: list[dict[str, Any]] = []
     if not result:
-        return {}
+        return {"matches": []}
     parent_ids = set()
     for chunk, distance in result:
         if chunk.parent_id:

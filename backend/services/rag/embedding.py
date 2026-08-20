@@ -14,7 +14,7 @@ _model = None
 def get_model():
     global _model
     if _model is None:
-        _model = BGEM3FlagModel(os.getenv("BGE_MODEL_PATH"),  use_fp16=True)
+        _model = BGEM3FlagModel(os.getenv("BGE_MODEL_PATH"),  use_fp16=False)
     return _model
 
 def _doc_embedding(

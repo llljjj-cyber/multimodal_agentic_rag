@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 from langchain_community.document_loaders import UnstructuredMarkdownLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_mineru import MinerULoader
+from starlette.concurrency import run_in_threadpool
 
 import crud
 from models import SourceModel
@@ -70,7 +71,7 @@ async def add_text_source(
     file: bool = False, 
     docs: list[Document] | None = None) -> SourceModel:
     if not file:
-        docs = _text_to_documents(title, text)
+        docs = await run_in_threadpool(_text_to_documents, title, text)
     try:
         source = await crud.create_source(
             db=db,
@@ -81,7 +82,7 @@ async def add_text_source(
             saved_path=saved_path,
         )
 
-        embed_docs = _doc_embedding(docs, sparse=False, colbert=False)
+        embed_docs = await run_in_threadpool(_doc_embedding, docs, sparse=False, colbert=False)
         for index, doc in enumerate(embed_docs):
             meta = doc.metadata
             await crud.create_chunk(
@@ -259,7 +260,7 @@ def load_txt_file(file_path: str) -> list[Document]:
 # markdown, pdf 文件添加
 async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modality: Literal["md", "pdf", "txt"], title: str | None = None):
     if modality.lower() == "txt":
-        docs = load_txt_file(saved_path)
+        docs = await run_in_threadpool(load_txt_file, saved_path) 
         if not docs:
             raise ValueError("文件解析后为空")
         source = await add_text_source(
@@ -273,13 +274,16 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
         )
     else:
         if modality.lower() == "pdf":
-            md_path = str(_pdf_to_md(saved_path))
+            md_path = str(await run_in_threadpool(_pdf_to_md, saved_path))
         elif modality.lower() == "md":
             md_path = None
         else:
             raise ValueError("不支持该类型文件")
         try:
-            parent_docs, child_docs = _parent_child_doc_from_md(md_path if md_path else saved_path)
+            parent_docs, child_docs = await run_in_threadpool(
+                        _parent_child_doc_from_md,
+                        md_path if md_path else saved_path,
+                    )
             if not parent_docs or not child_docs:
                 raise ValueError("文件解析后为空")
 
@@ -302,7 +306,9 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
                     child_count=p.metadata.get("child_count"),
                 )
 
-            embed_docs = _doc_embedding(child_docs, sparse=False, colbert=False)
+            embed_docs = await run_in_threadpool(
+                    lambda: _doc_embedding(child_docs, sparse=False, colbert=False)
+                )
             for index, doc in enumerate(embed_docs):
                 meta = doc.metadata
                 await crud.create_chunk(
