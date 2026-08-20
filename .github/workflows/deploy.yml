@@ -60,4 +60,5 @@ jobs:
             docker image prune -f
             docker compose ps
             curl -sf -o /dev/null http://127.0.0.1:8080/
+            curl -sf -o /dev/null http://127.0.0.1:8080/health
             echo "Smoke check OK"
