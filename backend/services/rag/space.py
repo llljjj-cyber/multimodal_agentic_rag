@@ -144,7 +144,7 @@ def _source_point(source: SourceModel, projection: dict[str, float]) -> dict[str
 
 async def snapshot(db: AsyncSession, user_id: str, projections: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
     source_vectors = await _source_vectors(db, user_id)
-    projection_map = projections or run_in_threadpool(_pca_projection, source_vectors)
+    projection_map = projections or await run_in_threadpool(_pca_projection, source_vectors)
     sources: list[SourceModel] = await crud.list_sources_by_user_id(db, user_id)
     points = [
         _source_point(source, projection_map.get(source.id, {"x": 0.0, "y": 0.0, "z": 0.0}))
