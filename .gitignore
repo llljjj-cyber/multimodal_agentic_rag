@@ -40,6 +40,8 @@ models/
 # 练习
 practice/
 
+README.md
+
 # IDE / 系统
 .vscode/
 .idea/
