@@ -6,12 +6,26 @@ export type Conversation = {
   created_at: string;
 };
 
+export type SourceStatus = "pending" | "processing" | "ready" | "failed";
+
 export type SourceMeta = {
   id: string;
   title: string;
   modality: string;
   summary?: string;
   created_at?: string;
+  status?: SourceStatus;
+  error_message?: string | null;
+  shelf_id?: string | null;
+  shelf_name?: string | null;
+  chunk_count?: number;
+};
+
+export type Shelf = {
+  id: string;
+  name: string;
+  created_at: string;
+  source_count?: number;
 };
 
 export type ChatMessage = {
@@ -81,6 +95,28 @@ export async function renameConversation(
   });
 }
 
+export async function listShelves(token: string): Promise<Shelf[]> {
+  return apiFetch<Shelf[]>("/shelves", token);
+}
+
+export async function createShelf(token: string, name: string): Promise<Shelf> {
+  return apiFetch<Shelf>("/shelves", token, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function renameShelf(token: string, shelfId: string, name: string): Promise<Shelf> {
+  return apiFetch<Shelf>(`/shelves/${shelfId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteShelf(token: string, shelfId: string): Promise<void> {
+  await apiFetch(`/shelves/${shelfId}`, token, { method: "DELETE" });
+}
+
 export async function deleteSource(token: string, sourceId: string): Promise<void> {
   await apiFetch(`/sources/${sourceId}`, token, { method: "DELETE" });
 }
@@ -96,8 +132,61 @@ export async function renameSource(
   });
 }
 
+export async function moveSourceToShelf(
+  token: string,
+  sourceId: string,
+  shelfId: string | null,
+): Promise<{ source: SourceMeta; space?: unknown }> {
+  return apiFetch(`/sources/${sourceId}/shelf`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ shelf_id: shelfId }),
+  });
+}
+
 export async function getSource(token: string, sourceId: string): Promise<SourceMeta> {
   const data = await apiFetch<{ source: SourceMeta }>(`/sources/${sourceId}`, token);
+  return data.source;
+}
+
+export type IngestInput =
+  | { kind: "text"; title: string; text: string; shelf_id?: string | null }
+  | { kind: "url"; url: string; title?: string; shelf_id?: string | null }
+  | { kind: "file"; file: File; title: string; shelf_id?: string | null };
+
+export async function ingestSource(token: string, input: IngestInput): Promise<SourceMeta> {
+  if (input.kind === "text") {
+    const data = await apiFetch<{ source: SourceMeta }>("/sources/text", token, {
+      method: "POST",
+      body: JSON.stringify({
+        title: input.title || "未命名",
+        text: input.text,
+        modality: "text",
+        shelf_id: input.shelf_id ?? null,
+      }),
+    });
+    return data.source;
+  }
+
+  if (input.kind === "url") {
+    const data = await apiFetch<{ source: SourceMeta }>("/sources/url", token, {
+      method: "POST",
+      body: JSON.stringify({
+        url: input.url,
+        title: input.title || undefined,
+        shelf_id: input.shelf_id ?? null,
+      }),
+    });
+    return data.source;
+  }
+
+  const form = new FormData();
+  form.append("title", input.title);
+  form.append("file", input.file);
+  if (input.shelf_id) form.append("shelf_id", input.shelf_id);
+  const data = await apiFetch<{ source: SourceMeta }>("/sources/file", token, {
+    method: "POST",
+    body: form,
+  });
   return data.source;
 }
 
@@ -117,6 +206,10 @@ export async function fetchSourceFile(token: string, sourceId: string): Promise<
 }
 
 export const READABLE_MODALITIES = new Set(["pdf", "md", "txt"]);
+
+export function isSourceBusy(status?: SourceStatus) {
+  return status === "pending" || status === "processing";
+}
 
 export type StreamPayload =
   | { kind: "conv_id"; convId: number }

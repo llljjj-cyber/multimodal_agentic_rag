@@ -1,7 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 export type SpacePoint = {
   id: string;
@@ -59,9 +59,41 @@ const DEFAULT_CAMERA = {
 };
 
 const DRAG_THRESHOLD_PX = 6;
+const POINT_SCALE = 1.35;
 
 function indexFromId(id: string) {
   return Array.from(id).reduce((total, char) => total + char.charCodeAt(0), 0);
+}
+
+/** 把点云平移到原点附近，便于摄像机对准中心 */
+function layoutPoints(points: SpacePoint[]) {
+  const raw = points.map(
+    (point) =>
+      new THREE.Vector3(
+        point.projection.x * POINT_SCALE,
+        point.projection.y * POINT_SCALE,
+        point.projection.z * POINT_SCALE,
+      ),
+  );
+  const center = new THREE.Vector3();
+  if (raw.length > 0) {
+    raw.forEach((vector) => center.add(vector));
+    center.divideScalar(raw.length);
+  }
+  const positions = raw.map((vector) => vector.sub(center));
+  let radius = 0;
+  positions.forEach((vector) => {
+    radius = Math.max(radius, vector.length());
+  });
+  return { positions, radius: Math.max(radius, 1.2) };
+}
+
+function cameraForRadius(radius: number) {
+  const distance = Math.max(5, Math.min(14, radius * 2.6 + 3));
+  return {
+    position: new THREE.Vector3(distance * 0.32, distance * 0.26, distance * 0.9),
+    target: new THREE.Vector3(0, 0, 0),
+  };
 }
 
 function makeGlowTexture() {
@@ -109,6 +141,10 @@ export default function SpaceCanvas({
   const pointMapRef = useRef<Map<string, SpacePoint>>(new Map());
   const selectedIdRef = useRef<string | null>(selectedId);
   const hoveredIdRef = useRef<string | null>(hoveredId);
+  const highlightRef = useRef<Set<string> | undefined>(highlightSourceIds);
+  const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
+  const onContextMenuRef = useRef(onContextMenu);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -119,24 +155,31 @@ export default function SpaceCanvas({
   }, [hoveredId]);
 
   useEffect(() => {
+    highlightRef.current = highlightSourceIds;
+  }, [highlightSourceIds]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    onHoverRef.current = onHover;
+    onContextMenuRef.current = onContextMenu;
+  }, [onSelect, onHover, onContextMenu]);
+
+  useEffect(() => {
     if (!mountRef.current) return;
 
     const mount = mountRef.current;
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(MERIDIAN.paper, 9, 26);
 
-    const camera = new THREE.PerspectiveCamera(48, mount.clientWidth / mount.clientHeight, 0.1, 100);
-    camera.position.copy(DEFAULT_CAMERA.position);
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.copy(DEFAULT_CAMERA.target);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.rotateSpeed = 0.65;
@@ -151,10 +194,22 @@ export default function SpaceCanvas({
       RIGHT: THREE.MOUSE.PAN,
     };
 
-    resetViewRef.current = () => {
-      camera.position.copy(DEFAULT_CAMERA.position);
-      controls.target.copy(DEFAULT_CAMERA.target);
+    const applyCamera = (position: THREE.Vector3, target: THREE.Vector3) => {
+      camera.position.copy(position);
+      controls.target.copy(target);
       controls.update();
+    };
+
+    const glowTexture = makeGlowTexture();
+    const allPoints = queryPoint ? [...points, queryPoint] : points;
+    pointMapRef.current = new Map(allPoints.map((point) => [point.id, point]));
+    const { positions: laidOut, radius } = layoutPoints(allPoints);
+    const framed = allPoints.length > 0 ? cameraForRadius(radius) : DEFAULT_CAMERA;
+    applyCamera(framed.position, framed.target);
+
+    resetViewRef.current = () => {
+      const next = allPoints.length > 0 ? cameraForRadius(radius) : DEFAULT_CAMERA;
+      applyCamera(next.position.clone(), next.target.clone());
     };
 
     const frameGroup = new THREE.Group();
@@ -197,6 +252,7 @@ export default function SpaceCanvas({
     );
 
     const raycaster = new THREE.Raycaster();
+    raycaster.params.Points = { threshold: 0.12 };
     const pointer = new THREE.Vector2();
     const meshes: THREE.Mesh[] = [];
     const halos: THREE.Sprite[] = [];
@@ -217,21 +273,10 @@ export default function SpaceCanvas({
       renderer.domElement.style.cursor = "grab";
     });
 
-    const glowTexture = makeGlowTexture();
-    const allPoints = queryPoint ? [...points, queryPoint] : points;
-    pointMapRef.current = new Map(allPoints.map((point) => [point.id, point]));
-
-    const toPosition = (point: SpacePoint) =>
-      new THREE.Vector3(
-        point.projection.x * 1.35,
-        point.projection.y * 1.35,
-        point.projection.z * 1.35,
-      );
-
-    allPoints.forEach((point) => {
-      const position = toPosition(point);
+    allPoints.forEach((point, index) => {
+      const position = laidOut[index] ?? new THREE.Vector3();
       const isQuery = point.modality === "query";
-      const isMatched = highlightSourceIds?.has(point.source_id) ?? false;
+      const isMatched = highlightRef.current?.has(point.source_id) ?? false;
       const color = pointColor(point);
 
       if (isQuery || isMatched) {
@@ -268,7 +313,7 @@ export default function SpaceCanvas({
       meshBySourceId.set(point.source_id, mesh);
       objectsById.set(point.id, {
         halo: halos.find((item) => item.userData.id === point.id),
-        base: position,
+        base: position.clone(),
         orbit: isQuery ? 0.024 : 0.06 + (indexFromId(point.id) % 5) * 0.01,
         phase: (indexFromId(point.id) % 13) * 0.62,
         speed: isQuery ? 0.24 : 0.3 + (indexFromId(point.id) % 7) * 0.03,
@@ -278,7 +323,7 @@ export default function SpaceCanvas({
     if (queryPoint) {
       const queryMesh = meshBySourceId.get(queryPoint.source_id);
       if (queryMesh) {
-        highlightSourceIds?.forEach((sourceId) => {
+        highlightRef.current?.forEach((sourceId) => {
           const target = meshBySourceId.get(sourceId);
           if (!target || sourceId === queryPoint.source_id) return;
           const geometry = new THREE.BufferGeometry().setFromPoints([
@@ -298,6 +343,7 @@ export default function SpaceCanvas({
 
     const pickPoint = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return undefined;
       pointerNdc(event, rect, pointer);
       raycaster.setFromCamera(pointer, camera);
       return raycaster.intersectObjects(meshes)[0];
@@ -308,7 +354,7 @@ export default function SpaceCanvas({
       const hit = pickPoint(event);
       renderer.domElement.style.cursor = hit ? "pointer" : "grab";
       const point = hit ? pointMapRef.current.get(hit.object.userData.id) ?? null : null;
-      onHover?.(point, point ? { x: event.clientX, y: event.clientY } : undefined);
+      onHoverRef.current?.(point, point ? { x: event.clientX, y: event.clientY } : undefined);
     };
 
     let pointerDownX = 0;
@@ -329,7 +375,7 @@ export default function SpaceCanvas({
       if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) return;
 
       const hit = pickPoint(event);
-      onSelect?.(hit ? pointMapRef.current.get(hit.object.userData.id) ?? null : null);
+      onSelectRef.current?.(hit ? pointMapRef.current.get(hit.object.userData.id) ?? null : null);
       updateCursor(event);
     };
 
@@ -338,11 +384,11 @@ export default function SpaceCanvas({
       const point = hit ? pointMapRef.current.get(hit.object.userData.id) : undefined;
       if (!point || point.modality === "query") return;
       event.preventDefault();
-      onContextMenu?.(point, { x: event.clientX, y: event.clientY });
+      onContextMenuRef.current?.(point, { x: event.clientX, y: event.clientY });
     };
 
     const handlePointerLeave = () => {
-      onHover?.(null);
+      onHoverRef.current?.(null);
     };
 
     renderer.domElement.style.cursor = "grab";
@@ -353,11 +399,17 @@ export default function SpaceCanvas({
     renderer.domElement.addEventListener("pointerleave", handlePointerLeave);
 
     const resize = () => {
-      camera.aspect = mount.clientWidth / mount.clientHeight;
+      const width = mount.clientWidth;
+      const height = mount.clientHeight;
+      if (width <= 0 || height <= 0) return;
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
+      renderer.setSize(width, height);
     };
+    resize();
     window.addEventListener("resize", resize);
+    const resizeObserver = new ResizeObserver(() => resize());
+    resizeObserver.observe(mount);
 
     let frame = 0;
     let animation = 0;
@@ -411,6 +463,7 @@ export default function SpaceCanvas({
     return () => {
       cancelAnimationFrame(animation);
       resetViewRef.current = null;
+      resizeObserver.disconnect();
       window.removeEventListener("resize", resize);
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.domElement.removeEventListener("pointermove", handlePointerMove);
@@ -418,7 +471,7 @@ export default function SpaceCanvas({
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
       renderer.domElement.removeEventListener("pointerleave", handlePointerLeave);
       controls.dispose();
-      mount.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       glowTexture.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
@@ -432,7 +485,7 @@ export default function SpaceCanvas({
       });
       renderer.dispose();
     };
-  }, [points, queryPoint, highlightSourceIds, onSelect, onHover, onContextMenu]);
+  }, [points, queryPoint]);
 
   return (
     <div className="space-canvas-wrap">

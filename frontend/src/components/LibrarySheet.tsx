@@ -1,62 +1,89 @@
-import { Loader2, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
-import { apiFetch, READABLE_MODALITIES, type SourceMeta } from "../api";
+import { Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { IngestInput, Shelf } from "../api";
 
 type Props = {
   open: boolean;
-  token: string;
+  shelves: Shelf[];
+  defaultShelfId?: string | null;
   onClose: () => void;
-  onUpdated: () => void;
-  onOpenReader?: (source: SourceMeta) => void;
+  onSubmit: (input: IngestInput) => void;
 };
 
-export default function LibrarySheet({ open, token, onClose, onUpdated, onOpenReader }: Props) {
+export default function LibrarySheet({
+  open,
+  shelves,
+  defaultShelfId = null,
+  onClose,
+  onSubmit,
+}: Props) {
   const [tab, setTab] = useState<"text" | "url" | "file">("text");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("");
+  const [shelfId, setShelfId] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setShelfId(defaultShelfId ?? "");
+      setError("");
+    }
+  }, [open, defaultShelfId]);
+
   if (!open) return null;
 
-  async function submit() {
-    setBusy(true);
+  function resetForm() {
+    setTitle("");
+    setText("");
+    setUrl("");
     setError("");
-    setStatus("入库中…");
-    try {
-      let uploaded: SourceMeta | null = null;
-      if (tab === "text") {
-        await apiFetch("/sources/text", token, {
-          method: "POST",
-          body: JSON.stringify({ title: title || "未命名", text, modality: "text" }),
-        });
-      } else if (tab === "url") {
-        await apiFetch("/sources/url", token, {
-          method: "POST",
-          body: JSON.stringify({ url, title: title || undefined }),
-        });
-      } else {
-        const file = fileRef.current?.files?.[0];
-        if (!file) { setError("请选择文件"); setBusy(false); return; }
-        const form = new FormData();
-        form.append("title", title || file.name);
-        form.append("file", file);
-        const data = await apiFetch<{ source: SourceMeta }>("/sources/file", token, { method: "POST", body: form });
-        uploaded = data.source;
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function handleSubmit() {
+    setError("");
+    const shelfPayload = shelfId ? shelfId : null;
+
+    if (tab === "text") {
+      if (!text.trim()) {
+        setError("请输入正文");
+        return;
       }
-      setStatus(uploaded && READABLE_MODALITIES.has(uploaded.modality) ? "已入库，正在打开阅读…" : "已入库，资料空间将刷新。");
-      onUpdated();
-      if (uploaded && READABLE_MODALITIES.has(uploaded.modality)) {
-        onOpenReader?.(uploaded);
+      onSubmit({
+        kind: "text",
+        title: title || "未命名",
+        text,
+        shelf_id: shelfPayload,
+      });
+    } else if (tab === "url") {
+      if (!url.trim()) {
+        setError("请输入网址");
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "入库失败");
-    } finally {
-      setBusy(false);
+      onSubmit({
+        kind: "url",
+        url: url.trim(),
+        title: title || undefined,
+        shelf_id: shelfPayload,
+      });
+    } else {
+      const file = fileRef.current?.files?.[0];
+      if (!file) {
+        setError("请选择文件");
+        return;
+      }
+      onSubmit({
+        kind: "file",
+        file,
+        title: title || file.name,
+        shelf_id: shelfPayload,
+      });
     }
+
+    resetForm();
+    onClose();
   }
 
   return (
@@ -67,27 +94,60 @@ export default function LibrarySheet({ open, token, onClose, onUpdated, onOpenRe
             <h3>添加入库</h3>
             <p>支持 PDF · Markdown · 文本</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+            <X size={18} />
+          </button>
         </header>
         <div className="add-tabs">
           {(["text", "url", "file"] as const).map((t) => (
-            <button key={t} type="button" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+            <button
+              key={t}
+              type="button"
+              className={tab === t ? "active" : ""}
+              onClick={() => setTab(t)}
+            >
               {t === "text" ? "文本" : t === "url" ? "链接" : "文件"}
             </button>
           ))}
         </div>
         <label className="field-label">标题</label>
-        <input className="field-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="可选" />
+        <input
+          className="field-input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="可选"
+        />
+        <label className="field-label">放进资料架</label>
+        <select className="field-input" value={shelfId} onChange={(e) => setShelfId(e.target.value)}>
+          <option value="">未分类（稍后整理）</option>
+          {shelves.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {defaultShelfId && shelves.some((s) => s.id === defaultShelfId) && (
+          <p className="field-hint">已根据当前资料架预选，可随时更改。</p>
+        )}
         {tab === "text" && (
           <>
             <label className="field-label">正文</label>
-            <textarea className="field-input field-textarea" value={text} onChange={(e) => setText(e.target.value)} />
+            <textarea
+              className="field-input field-textarea"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
           </>
         )}
         {tab === "url" && (
           <>
             <label className="field-label">网址</label>
-            <input className="field-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
+            <input
+              className="field-input"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://…"
+            />
           </>
         )}
         {tab === "file" && (
@@ -96,11 +156,12 @@ export default function LibrarySheet({ open, token, onClose, onUpdated, onOpenRe
             <input ref={fileRef} type="file" accept=".txt,.md,.pdf" className="field-input" />
           </>
         )}
-        <button type="button" className="btn-primary sheet-submit" onClick={submit} disabled={busy}>
-          {busy ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
+
+        <button type="button" className="btn-primary sheet-submit" onClick={handleSubmit}>
+          <Upload size={16} />
           嵌入入库
         </button>
-        {status && <div className="status-banner ok">{status}</div>}
+
         {error && <div className="status-banner err">{error}</div>}
       </div>
     </div>

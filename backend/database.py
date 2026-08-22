@@ -24,12 +24,44 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 async def init_db() -> None:
-    from models import ChunkModel, SourceModel, UserModel, ConversationModel, MessageModel, ParentDocModel  # noqa: F401
+    from models import ChunkModel, SourceModel, UserModel, ConversationModel, MessageModel, ParentDocModel, ShelfModel # noqa: F401
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
         # 数据库中表的更新
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE sources
+                ADD COLUMN IF NOT EXISTS shelf_id VARCHAR(16)
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'fk_sources_shelf_id'
+                    ) THEN
+                        ALTER TABLE sources
+                        ADD CONSTRAINT fk_sources_shelf_id
+                        FOREIGN KEY (shelf_id) REFERENCES shelves (id) ON DELETE SET NULL;
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE sources
+                ADD COLUMN IF NOT EXISTS chunk_count INTEGER DEFAULT 0 NOT NULL
+                """
+            )
+        )
         await conn.execute(
             text(
                 """

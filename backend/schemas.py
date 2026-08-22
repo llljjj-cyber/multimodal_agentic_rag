@@ -7,12 +7,12 @@ class TextSourceRequest(BaseModel):
     title: str
     text: str
     modality: Literal["text"] = "text"
-
+    shelf_id: str | None = None
 
 class UrlSourceRequest(BaseModel):
     url: HttpUrl
     title: Optional[str] = None
-
+    shelf_id: str | None = None
 
 class AskRequest(BaseModel):
     question: str
@@ -34,6 +34,23 @@ class User(BaseModel):
     id: str
     username: str
 
+class ShelfRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=20)
+
+class ShelfResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    source_count: int = 0
+    created_at: datetime
+
+class ShelfRenameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=20)
+
+class SourceMoveToShelfRequest(BaseModel):
+    shelf_id: str | None = None
+
 class SourceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,10 +62,12 @@ class SourceOut(BaseModel):
         default_factory=dict,
         validation_alias="metadata_",
     )
+    shelf_id: str | None = None
+    chunk_count: int = 0
     created_at: datetime
 
 class SourceRenameRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=255)
+    title: str = Field(..., min_length=1, max_length=20)
 
 class Token(BaseModel):
     access_token: str

@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
-from models import ChunkModel, ConversationModel, MessageModel, ParentDocModel, SourceModel, Base, UserModel
+from models import ChunkModel, ConversationModel, MessageModel, ParentDocModel, ShelfModel, SourceModel, Base, UserModel
 
 
 async def create_chunk(
@@ -189,6 +189,53 @@ async def count_by_modality(db: AsyncSession, user_id: str, Model: Base) -> dict
     result = await db.execute(text(sql), {"user_id": user_id})
     return {modality: count for modality, count in result.all()}
 
+
+async def create_shelf(db: AsyncSession, user_id: str, name: str) -> ShelfModel:
+    shelf = ShelfModel(user_id=user_id, name=name)
+    db.add(shelf)
+    await db.flush()
+    shelf.source_count = 0
+    return shelf
+
+async def get_shelf(db: AsyncSession, shelf_id: str) -> ShelfModel | None:
+    result = await db.execute(select(ShelfModel).where(ShelfModel.id == shelf_id))
+    return result.scalar_one_or_none()
+
+async def list_shelves_by_user_id(db: AsyncSession, user_id: str):
+    q = (
+        select(
+            ShelfModel,
+            func.count(SourceModel.id).label("source_count"),
+        )
+        .outerjoin(SourceModel, SourceModel.shelf_id == ShelfModel.id)
+        .where(ShelfModel.user_id == user_id)
+        .group_by(ShelfModel.id)
+    )
+    rows = (await db.execute(q)).all()
+    out = []
+    for shelf, count in rows:
+        shelf.source_count = count 
+        out.append(shelf)
+    return out
+
+async def rename_shelf(db: AsyncSession, shelf: ShelfModel, name: str) -> ShelfModel:
+    shelf.name = name.strip()
+    await db.flush()
+    count = await db.scalar(
+        select(func.count(SourceModel.id)).where(SourceModel.shelf_id == shelf.id)
+    )
+    shelf.source_count = count or 0
+    return shelf
+
+async def delete_shelf(db: AsyncSession, shelf: ShelfModel) -> None:
+    await db.delete(shelf)
+    await db.commit()
+
+async def move_source_to_shelf(db: AsyncSession, source: SourceModel, shelf_id: str) -> SourceModel:
+    source.shelf_id = shelf_id
+    await db.commit()
+    await db.refresh(source)
+    return source
 
 async def space_stats(db: AsyncSession, user_id: str) -> dict:
     sources = await get_count_by_user_id(db, user_id, SourceModel)

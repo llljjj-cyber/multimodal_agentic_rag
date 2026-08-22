@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from services.rag.space import snapshot as get_space_snapshot
 from database import get_db
 import crud
-from schemas import SourceOut, SourceRenameRequest, TextSourceRequest, UrlSourceRequest, User
+from schemas import SourceMoveToShelfRequest, SourceOut, SourceRenameRequest, TextSourceRequest, UrlSourceRequest, User
 from dependencies import get_current_user
 
 
@@ -65,6 +65,8 @@ async def add_text_source(
     user: User = Depends(get_current_user)):
     try:
         source = await store.add_text_source(db, user.id, req.title, req.text, req.modality)
+        if req.shelf_id:
+            await crud.move_source_to_shelf(db, source, req.shelf_id)
         space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -86,6 +88,8 @@ async def add_url_source(
         text = _extract_text_from_html(response.text)
         title = req.title or url.replace("https://", "").replace("http://", "")[:80]
         source = await store.add_text_source(db, user.id, title, text[:12000], "url")
+        if req.shelf_id:
+            await crud.move_source_to_shelf(db, source, req.shelf_id)
         space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         raise HTTPException(400, f"无法入库该网址：{exc}") from exc
@@ -98,6 +102,7 @@ async def add_file_source(
     user: User = Depends(get_current_user),
     file: UploadFile = File(...),
     title: str | None = Form(None),
+    shelf_id: str | None = Form(None),
 ):
     suffix = Path(file.filename or "").suffix.lower()
     title = title or file.filename or ""
@@ -120,6 +125,8 @@ async def add_file_source(
         source = await store.add_file_source(
             db, user.id, str(saved_path), modality=modality, title=title
         )
+        if shelf_id:
+            await crud.move_source_to_shelf(db, source, shelf_id)   
         space = await get_space_snapshot(db, user.id)
     except Exception as exc:
         Path(saved_path).unlink(missing_ok=True)
@@ -171,6 +178,22 @@ async def rename_source(
     if not source:
         raise HTTPException(404, "未找到该资料。")
     source = await crud.update_source_title(db, source, req.title)
+    space = await get_space_snapshot(db, user.id)
+    return {"source": SourceOut.model_validate(source), "space": space}
+
+@router.patch("/{source_id}/shelf")
+async def move_source_to_shelf(
+    source_id: str,
+    req: SourceMoveToShelfRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    source = await store.get_source(db, user.id, source_id)
+    if not source:
+        raise HTTPException(404, "未找到该资料。")
+    if source.user_id != user.id:
+        raise HTTPException(403, "无权修改")
+    await crud.move_source_to_shelf(db, source, req.shelf_id)
     space = await get_space_snapshot(db, user.id)
     return {"source": SourceOut.model_validate(source), "space": space}
 

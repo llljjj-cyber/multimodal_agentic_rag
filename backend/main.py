@@ -15,6 +15,7 @@ from schemas import User
 from routers.auth import router as auth_router
 from routers.sources import router as sources_router
 from routers.conversations import router as conversation_router
+from routers.shelves import router as shelves_router
 from routers.chat import router as chat_router
 from dependencies import get_current_user
 from services.rag.space import snapshot
@@ -60,6 +61,7 @@ app.include_router(auth_router)
 app.include_router(sources_router)
 app.include_router(conversation_router)
 app.include_router(chat_router)
+app.include_router(shelves_router)
 
 if __name__ == "__main__":
     import uvicorn

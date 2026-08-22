@@ -1,9 +1,14 @@
 import { LayoutGrid, LogOut, MessageSquare, Package, Plus } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiFetch,
+  createShelf,
   deleteConversation,
   deleteSource,
+  ingestSource,
+  isSourceBusy,
+  listShelves,
+  moveSourceToShelf,
   renameConversation,
   renameSource,
   listConversations,
@@ -12,13 +17,19 @@ import {
   streamChat,
   type ChatMessage,
   type Conversation,
+  type IngestInput,
+  type Shelf,
   type SourceMeta,
+  type SourceStatus,
 } from "./api";
 import AuthScreen from "./components/AuthScreen";
 import ButlerPanel, { type LayoutMode } from "./components/ButlerPanel";
 import ConfirmDialog from "./components/ConfirmDialog";
+import CreateShelfDialog from "./components/CreateShelfDialog";
+import IngestToastStack, { type IngestJob } from "./components/IngestToastStack";
 import LibrarySheet from "./components/LibrarySheet";
 import RenameSourceDialog from "./components/RenameSourceDialog";
+import ShelfRail, { type ShelfFilter } from "./components/ShelfRail";
 import SourceContextMenu from "./components/SourceContextMenu";
 import SourceGrid from "./components/SourceGrid";
 import SourceHoverCard from "./components/SourceHoverCard";
@@ -41,6 +52,10 @@ type RackSource = {
   summary: string;
   chunks: number;
   created_at?: string;
+  status?: SourceStatus;
+  error_message?: string | null;
+  shelf_id?: string | null;
+  shelf_name?: string | null;
 };
 
 type SpaceSnapshot = {
@@ -60,6 +75,10 @@ function normalizeSpace(data: unknown): SpaceSnapshot {
   return {
     sources: sourcesRaw.map((item) => {
       const s = (item ?? {}) as Record<string, unknown>;
+      const statusRaw = typeof s.status === "string" ? s.status : "ready";
+      const status = (["pending", "processing", "ready", "failed"].includes(statusRaw)
+        ? statusRaw
+        : "ready") as SourceStatus;
       return {
         id: String(s.id ?? ""),
         title: String(s.title ?? ""),
@@ -67,6 +86,10 @@ function normalizeSpace(data: unknown): SpaceSnapshot {
         summary: String(s.summary ?? ""),
         chunks: typeof s.chunks === "number" ? s.chunks : typeof s.chunk_count === "number" ? s.chunk_count : 0,
         created_at: typeof s.created_at === "string" ? s.created_at : undefined,
+        status,
+        error_message: typeof s.error_message === "string" ? s.error_message : null,
+        shelf_id: s.shelf_id == null || s.shelf_id === "" ? null : String(s.shelf_id),
+        shelf_name: typeof s.shelf_name === "string" ? s.shelf_name : null,
       };
     }),
     points: (Array.isArray(p.points) ? p.points : []) as SpacePoint[],
@@ -85,18 +108,31 @@ function pointMetaLine(point: SpacePoint, sources: RackSource[]) {
   const modality = MODALITY_LABELS[point.modality] || point.modality;
   if (point.modality === "query") return modality;
   const source = sources.find((item) => item.id === point.source_id);
+  const shelf = source?.shelf_name || (source && source.shelf_id == null ? "未分类" : "");
+  const bits = [modality];
+  if (shelf) bits.push(shelf);
   if (source?.created_at) {
     const when = formatWhen(source.created_at);
-    return when ? `${modality} · ${when}` : modality;
+    if (when) bits.push(when);
   }
-  return modality;
+  if (isSourceBusy(source?.status)) bits.push("处理中");
+  if (source?.status === "failed") bits.push("失败");
+  return bits.join(" · ");
+}
+
+function matchesShelfFilter(source: RackSource, filter: ShelfFilter) {
+  if (filter === "all") return true;
+  if (filter === "inbox") return source.shelf_id == null;
+  return source.shelf_id === filter;
 }
 
 function Workspace({ token, username, onLogout }: { token: string; username: string; onLogout: () => void }) {
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("balanced");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("warehouse");
   const [warehouseView, setWarehouseView] = useState<WarehouseView>(readWarehouseView);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [space, setSpace] = useState<SpaceSnapshot | null>(null);
+  const [shelves, setShelves] = useState<Shelf[]>([]);
+  const [shelfFilter, setShelfFilter] = useState<ShelfFilter>("all");
   const [selectedPoint, setSelectedPoint] = useState<SpacePoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<SpacePoint | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
@@ -105,6 +141,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<SpacePoint | null>(null);
   const [renamingSource, setRenamingSource] = useState(false);
+  const [createShelfOpen, setCreateShelfOpen] = useState(false);
+  const [creatingShelf, setCreatingShelf] = useState(false);
   const [readingSource, setReadingSource] = useState<SourceMeta | null>(null);
   const [meridianCompanionOpen, setMeridianCompanionOpen] = useState(true);
   const readingShellRef = useRef<HTMLDivElement | null>(null);
@@ -121,8 +159,46 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [renamingConvId, setRenamingConvId] = useState<number | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [ingestJobs, setIngestJobs] = useState<IngestJob[]>([]);
 
-  const sourceCount = space?.sources.length ?? 0;
+  const allSources = space?.sources ?? [];
+  const filteredSources = useMemo(
+    () => allSources.filter((s) => matchesShelfFilter(s, shelfFilter)),
+    [allSources, shelfFilter],
+  );
+  const filteredSourceIds = useMemo(() => new Set(filteredSources.map((s) => s.id)), [filteredSources]);
+  const filteredPoints = useMemo(
+    () => (space?.points ?? []).filter((p) => p.modality === "query" || filteredSourceIds.has(p.source_id)),
+    [space?.points, filteredSourceIds],
+  );
+  const emptyHighlightIds = useMemo(() => new Set<string>(), []);
+  const shelfCounts = useMemo(() => {
+    const map: Record<string, number> = { all: allSources.length, inbox: 0 };
+    for (const shelf of shelves) map[shelf.id] = 0;
+    for (const src of allSources) {
+      if (src.shelf_id == null) map.inbox += 1;
+      else if (map[src.shelf_id] != null) map[src.shelf_id] += 1;
+      else map[src.shelf_id] = 1;
+    }
+    return map;
+  }, [allSources, shelves]);
+  const processingCount = useMemo(
+    () => ingestJobs.filter((job) => job.status === "processing").length,
+    [ingestJobs],
+  );
+  const ingestDefaultShelfId =
+    shelfFilter !== "all" && shelfFilter !== "inbox" ? shelfFilter : null;
+  const activeShelfName =
+    ingestDefaultShelfId != null
+      ? shelves.find((s) => s.id === ingestDefaultShelfId)?.name
+      : shelfFilter === "inbox"
+        ? "未分类"
+        : null;
+
+  function openLibrary() {
+    setLibraryOpen(true);
+  }
+  const sourceCount = allSources.filter((s) => s.status !== "failed").length;
   const isReading = readingSource != null;
   const isReadingRef = useRef(isReading);
   isReadingRef.current = isReading;
@@ -148,6 +224,18 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     const data = await apiFetch<{ space?: unknown }>("/space", token);
     setSpace(normalizeSpace(data));
   }, [token]);
+
+  const refreshShelves = useCallback(async () => {
+    try {
+      setShelves(await listShelves(token));
+    } catch (err) {
+      handleAuthFailure(err);
+      // 后端未实现 /shelves 时不阻断主流程
+      if (err && typeof err === "object" && "status" in err && (err as { status?: number }).status === 404) {
+        setShelves([]);
+      }
+    }
+  }, [token, handleAuthFailure]);
 
   const refreshConversations = useCallback(async () => {
     setConversationsLoading(true);
@@ -178,6 +266,19 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   useEffect(() => {
     refreshSpace().catch(handleAuthFailure);
   }, [refreshSpace, handleAuthFailure]);
+
+  useEffect(() => {
+    refreshShelves().catch(() => undefined);
+  }, [refreshShelves]);
+
+  useEffect(() => {
+    const busy = (space?.sources ?? []).some((s) => isSourceBusy(s.status));
+    if (!busy) return;
+    const id = window.setInterval(() => {
+      refreshSpace().catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [space?.sources, refreshSpace]);
 
   useEffect(() => {
     refreshConversations().catch(() => undefined);
@@ -266,6 +367,45 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     });
   }
 
+  function dismissIngestJob(id: string) {
+    setIngestJobs((jobs) => jobs.filter((job) => job.id !== id));
+  }
+
+  function handleIngest(input: IngestInput) {
+    const jobId = crypto.randomUUID();
+    const title =
+      input.kind === "file"
+        ? input.title
+        : input.kind === "text"
+          ? input.title || "未命名"
+          : input.title || input.url.replace(/^https?:\/\//, "").slice(0, 48);
+
+    setIngestJobs((jobs) => [...jobs, { id: jobId, title, status: "processing" }]);
+
+    void (async () => {
+      try {
+        const source = await ingestSource(token, input);
+        setIngestJobs((jobs) =>
+          jobs.map((job) => (job.id === jobId ? { ...job, status: "success" } : job)),
+        );
+        await refreshSpace();
+        await refreshShelves().catch(() => undefined);
+        if (READABLE_MODALITIES.has(source.modality)) {
+          openReader(source);
+        }
+        window.setTimeout(() => {
+          setIngestJobs((jobs) => jobs.filter((job) => job.id !== jobId));
+        }, 4500);
+      } catch (err) {
+        handleAuthFailure(err);
+        const message = err instanceof Error ? err.message : "入库失败";
+        setIngestJobs((jobs) =>
+          jobs.map((job) => (job.id === jobId ? { ...job, status: "error", message } : job)),
+        );
+      }
+    })();
+  }
+
   function handleAskFromReader(text: string) {
     setDraft(text);
     setMeridianCompanionOpen(true);
@@ -351,6 +491,38 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
       setError(err.message || "重命名失败");
     } finally {
       setRenamingSource(false);
+    }
+  }
+
+  async function handleMoveToShelf(shelfId: string | null) {
+    if (!contextMenu) return;
+    const sourceId = contextMenu.point.source_id;
+    setContextMenu(null);
+    setError("");
+    try {
+      const data = await moveSourceToShelf(token, sourceId, shelfId);
+      if (data.space) setSpace(normalizeSpace(data.space));
+      else await refreshSpace();
+      await refreshShelves();
+    } catch (err) {
+      handleAuthFailure(err);
+      setError(err instanceof Error ? err.message : "移动失败");
+    }
+  }
+
+  async function handleCreateShelf(name: string) {
+    setError("");
+    setCreatingShelf(true);
+    try {
+      const shelf = await createShelf(token, name);
+      await refreshShelves();
+      setShelfFilter(shelf.id);
+      setCreateShelfOpen(false);
+    } catch (err) {
+      handleAuthFailure(err);
+      setError(err instanceof Error ? err.message : "创建资料架失败");
+    } finally {
+      setCreatingShelf(false);
     }
   }
 
@@ -479,6 +651,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
               {sourceCount > 0
                 ? `${sourceCount} 份资料 · 知识空间已就绪`
                 : "开始入库，构建你的知识空间"}
+              {processingCount > 0 ? ` · ${processingCount} 份入库中` : ""}
             </p>
           </div>
           <div className="vault-toolbar">
@@ -495,7 +668,16 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
             </div>
             <span className="meta-chip">🙂 {username}</span>
             <span className="meta-chip">{sourceCount} 资料</span>
-            <button type="button" className="btn-ghost" onClick={() => setLibraryOpen(true)}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={openLibrary}
+              title={
+                activeShelfName
+                  ? `入库到「${activeShelfName}」`
+                  : "添加入库"
+              }
+            >
               <Plus size={15} /> 入库
             </button>
             <button type="button" className="icon-btn" onClick={onLogout} title="退出"><LogOut size={16} /></button>
@@ -508,13 +690,21 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
       {!isReading && (
       <div className={`vault-workspace mode-${layoutMode}`}>
         {layoutMode !== "chat" && (
-          <section className={`warehouse-stage view-${warehouseView}`}>
+          <section className={`warehouse-stage with-shelf view-${warehouseView}`}>
+            <ShelfRail
+              shelves={shelves}
+              filter={shelfFilter}
+              counts={shelfCounts}
+              onFilterChange={setShelfFilter}
+              onCreateShelf={() => setCreateShelfOpen(true)}
+            />
+            <div className="warehouse-main">
               {warehouseView === "spatial" ? (
                 <>
                   <SpaceCanvas
-                    points={space?.points ?? []}
+                    points={filteredPoints}
                     queryPoint={null}
-                    highlightSourceIds={new Set()}
+                    highlightSourceIds={emptyHighlightIds}
                     selectedId={selectedPoint?.id ?? null}
                     hoveredId={hoveredPoint?.id ?? null}
                     onSelect={handleSelectPoint}
@@ -528,11 +718,15 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                       />
                     }
                   />
-                  {cardPoint && cardPoint.modality !== "query" && (
+                  {cardPoint && cardPoint.modality !== "query" && filteredSourceIds.has(cardPoint.source_id) && (
                     <SourceHoverCard
                       point={cardPoint}
-                      metaLine={pointMetaLine(cardPoint, space?.sources ?? [])}
-                      readable={READABLE_MODALITIES.has(cardPoint.modality)}
+                      metaLine={pointMetaLine(cardPoint, allSources)}
+                      readable={
+                        READABLE_MODALITIES.has(cardPoint.modality) &&
+                        !isSourceBusy(allSources.find((s) => s.id === cardPoint.source_id)?.status) &&
+                        allSources.find((s) => s.id === cardPoint.source_id)?.status !== "failed"
+                      }
                       pinned={Boolean(selectedPoint)}
                       style={
                         cardPosition
@@ -557,21 +751,53 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                       }}
                     />
                   )}
-                  {sourceCount > 0 && sourceCount < 2 && (
-                    <div className="warehouse-hint">再添加几份资料，空间会更清晰。点击右上角「入库」开始。</div>
+                  {filteredSources.length === 0 && (
+                    <div className="warehouse-empty">
+                      <p className="warehouse-empty-title">
+                        {shelfFilter === "all"
+                          ? "这一视图暂无资料"
+                          : shelfFilter === "inbox"
+                            ? "未分类还是空的"
+                            : `「${activeShelfName ?? "此架"}」还没有资料`}
+                      </p>
+                      <p className="warehouse-empty-desc">
+                        {shelfFilter === "all"
+                          ? "从右上角入库，或点下方按钮开始。"
+                          : shelfFilter === "inbox"
+                            ? "入库后可先放在未分类，稍后整理到资料架。"
+                            : `点击入库将默认放入「${activeShelfName ?? "此架"}」，也可从右键菜单移入。`}
+                      </p>
+                      <button type="button" className="btn-ghost" onClick={openLibrary}>
+                        <Plus size={15} /> 开始入库
+                      </button>
+                    </div>
                   )}
                 </>
               ) : (
                 <SourceGrid
-                  sources={space?.sources ?? []}
+                  sources={filteredSources}
                   selectedId={selectedPoint?.source_id ?? null}
                   modalityLabels={MODALITY_LABELS}
                   readableModalities={READABLE_MODALITIES}
+                  emptyTitle={
+                    shelfFilter === "all"
+                      ? "仓库还是空的"
+                      : shelfFilter === "inbox"
+                        ? "未分类还是空的"
+                        : `「${activeShelfName ?? "此架"}」还没有资料`
+                  }
+                  emptyDesc={
+                    shelfFilter === "all"
+                      ? "入库 PDF、Markdown 或文本，Meridian 会帮你整理成可检索的知识空间。"
+                      : shelfFilter === "inbox"
+                        ? "先入库到未分类，稍后可用右键整理到资料架。"
+                        : `将默认入库到「${activeShelfName ?? "此架"}」。也可从其它资料右键移入。`
+                  }
                   onSelect={handleGridSelect}
                   onOpen={openReader}
                   onAsk={askAboutSource}
                   onContextMenu={handleGridContextMenu}
-                  onAddSource={() => setLibraryOpen(true)}
+                  onAddSource={openLibrary}
                   viewSwitch={
                     <WarehouseViewSwitch
                       variant="toolbar"
@@ -581,12 +807,15 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                   }
                 />
               )}
+            </div>
               {contextMenu && (
                 <SourceContextMenu
                   x={contextMenu.x}
                   y={contextMenu.y}
                   title={contextMenu.point.title}
                   readable={READABLE_MODALITIES.has(contextMenu.point.modality)}
+                  currentShelfId={allSources.find((s) => s.id === contextMenu.point.source_id)?.shelf_id ?? null}
+                  shelves={shelves}
                   onOpen={
                     READABLE_MODALITIES.has(contextMenu.point.modality)
                       ? () => openReaderFromPoint(contextMenu.point)
@@ -596,6 +825,9 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                   onRename={() => {
                     setRenameTarget(contextMenu.point);
                     setContextMenu(null);
+                  }}
+                  onMoveToShelf={(shelfId) => {
+                    void handleMoveToShelf(shelfId);
                   }}
                   onDelete={() => {
                     setPendingDeleteSourceId(contextMenu.point.source_id);
@@ -690,14 +922,13 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
 
       <LibrarySheet
         open={libraryOpen}
-        token={token}
+        shelves={shelves}
+        defaultShelfId={ingestDefaultShelfId}
         onClose={() => setLibraryOpen(false)}
-        onUpdated={() => refreshSpace().catch(handleAuthFailure)}
-        onOpenReader={(source) => {
-          setLibraryOpen(false);
-          openReader(source);
-        }}
+        onSubmit={handleIngest}
       />
+
+      <IngestToastStack jobs={ingestJobs} onDismiss={dismissIngestJob} />
 
       <ConfirmDialog
         open={pendingDeleteId != null}
@@ -736,6 +967,17 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         }}
         onConfirm={(title) => {
           void confirmRenameSource(title);
+        }}
+      />
+
+      <CreateShelfDialog
+        open={createShelfOpen}
+        busy={creatingShelf}
+        onCancel={() => {
+          if (!creatingShelf) setCreateShelfOpen(false);
+        }}
+        onConfirm={(name) => {
+          void handleCreateShelf(name);
         }}
       />
     </div>

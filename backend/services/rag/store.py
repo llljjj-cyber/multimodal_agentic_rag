@@ -19,7 +19,8 @@ from services.rag.embedding import _doc_embedding
 
 CHUNK_SIZE = 600         
 CHUNK_OVERLAP = 120       
-MIN_CHUNK_CHARS = 30      
+MIN_CHUNK_CHARS = 30    
+MAX_EMBED_CHARS = 2000
 PARENT_CATEGORIES = {"Title"}
 CHILD_CATEGORIES = {"NarrativeText", "Text", "Table", "ListItem", "UncategorizedText"}
 SKIP_PATTERNS = ("Wikipedia",)
@@ -76,7 +77,7 @@ async def add_text_source(
         source = await crud.create_source(
             db=db,
             user_id=user_id,
-            title=title.strip() or f"{modality.title()} source", # 注意
+            title=title.strip() or f"{modality.title()} source", 
             modality=modality,
             summary=_normalize_text(text)[:220] if not file else docs[0].page_content[:220] ,
             saved_path=saved_path,
@@ -96,6 +97,7 @@ async def add_text_source(
                 chunk_index=index + 1,
                 vector=meta.get("dense")
             )
+        source.chunk_count = len(embed_docs)
         await db.commit()
         await db.refresh(source)
     
@@ -249,7 +251,23 @@ def _parent_child_doc_from_md(file_path: str) -> tuple[list[Document], list[Docu
         mode="elements"
     )
     docs = loader.load()
-    parent_docs, child_docs = build_parent_child_documents(docs)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=MAX_EMBED_CHARS,
+        chunk_overlap=100,
+        length_function=len,
+        separators=["\n\n", "\n", "。", "！", "？", ". ", " ", ""],
+        is_separator_regex=False
+    )
+    ex_docs: list[Document] = []
+    for doc in docs:
+        if (
+            doc.metadata.get("category") not in PARENT_CATEGORIES
+            and len(doc.page_content) > MAX_EMBED_CHARS
+        ):
+            ex_docs.extend(splitter.split_documents([doc]))
+        else:
+            ex_docs.append(doc)
+    parent_docs, child_docs = build_parent_child_documents(ex_docs)
     return parent_docs, child_docs
 
 def load_txt_file(file_path: str) -> list[Document]:
@@ -266,7 +284,7 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
         source = await add_text_source(
             db=db,
             user_id=user_id,
-            title=title or "未命名", #
+            title=title or "未命名", 
             modality="txt",
             file=True,
             docs=docs,
@@ -323,6 +341,7 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
                     chunk_index=index+1,
                     vector=meta.get("dense")
                 )
+            source.chunk_count = len(embed_docs)
             await db.commit()
             await db.refresh(source)
         except Exception:

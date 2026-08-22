@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func  # Text 是一个可变长度的文本字段，没有长度限制（不像 String(255)那样有最大字符数），适合存储较长的内容
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint  # Text 是一个可变长度的文本字段，没有长度限制（不像 String(255)那样有最大字符数），适合存储较长的内容
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,10 +31,31 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    shelves: Mapped[list["ShelfModel"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
+class ShelfModel(Base):
+    __tablename__ = "shelves"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_shelf_name"),)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["UserModel"] = relationship(back_populates="shelves")
+    sources: Mapped[list["SourceModel"]] = relationship(
+        back_populates="shelf"
+    )
 
 class SourceModel(Base):
-    """对应 rag_store.RackSource"""
     __tablename__ = "sources"
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default=new_id)
@@ -44,27 +65,32 @@ class SourceModel(Base):
         nullable=False,
         index=True,
     )
+    shelf_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("shelves.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     modality: Mapped[str] = mapped_column(String(32), nullable=False)  # text/url/pdf/md/txt/image
     summary: Mapped[str] = mapped_column(Text, default="")
     saved_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["UserModel"] = relationship(back_populates="sources")
+    shelf: Mapped["ShelfModel"] = relationship(back_populates="sources")
     chunks: Mapped[list["ChunkModel"]] = relationship(
         back_populates="source",
         cascade="all, delete-orphan",
     )
     parents: Mapped[list["ParentDocModel"]] = relationship(back_populates="source", cascade="all, delete-orphan")
    
-    @property
-    def chunk_count(self) -> int:
-        return len(self.chunks)
+    
 
 
 class ChunkModel(Base):
-    """对应 rag_store.RackChunk"""
     __tablename__ = "chunks"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)

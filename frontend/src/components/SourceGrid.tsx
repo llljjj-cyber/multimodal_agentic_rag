@@ -1,5 +1,7 @@
-import { BookOpen, MessageSquare, MoreHorizontal, Search } from "lucide-react";
+import { BookOpen, Loader2, MessageSquare, MoreHorizontal, Plus, Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { isSourceBusy, type SourceStatus } from "../api";
+
 export type GridSource = {
   id: string;
   title: string;
@@ -7,6 +9,10 @@ export type GridSource = {
   summary: string;
   chunks: number;
   created_at?: string;
+  status?: SourceStatus;
+  error_message?: string | null;
+  shelf_id?: string | null;
+  shelf_name?: string | null;
 };
 
 type SortKey = "newest" | "title" | "modality";
@@ -16,6 +22,8 @@ type Props = {
   selectedId: string | null;
   modalityLabels: Record<string, string>;
   readableModalities: Set<string>;
+  emptyTitle?: string;
+  emptyDesc?: string;
   onSelect: (source: GridSource) => void;
   onOpen: (source: GridSource) => void;
   onAsk: (source: GridSource) => void;
@@ -37,11 +45,20 @@ function previewText(text: string, max = 120) {
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
+function footLabel(source: GridSource) {
+  if (source.status === "failed") return source.error_message || "入库失败";
+  if (isSourceBusy(source.status)) return "解析 / 向量化中…";
+  const shelf = source.shelf_name || (source.shelf_id == null ? "未分类" : "");
+  return shelf ? `${source.chunks} 片段 · ${shelf}` : `${source.chunks} 片段`;
+}
+
 export default function SourceGrid({
   sources,
   selectedId,
   modalityLabels,
   readableModalities,
+  emptyTitle = "仓库还是空的",
+  emptyDesc = "入库 PDF、Markdown 或文本，Meridian 会帮你整理成可检索的知识空间。",
   onSelect,
   onOpen,
   onAsk,
@@ -60,7 +77,8 @@ export default function SourceGrid({
         (s) =>
           s.title.toLowerCase().includes(q) ||
           s.summary.toLowerCase().includes(q) ||
-          (modalityLabels[s.modality] ?? s.modality).toLowerCase().includes(q),
+          (modalityLabels[s.modality] ?? s.modality).toLowerCase().includes(q) ||
+          (s.shelf_name ?? "").toLowerCase().includes(q),
       );
     }
     const sorted = [...list];
@@ -84,11 +102,11 @@ export default function SourceGrid({
         {viewSwitch && <div className="source-grid-chrome">{viewSwitch}</div>}
         <div className="source-grid-empty">
           <div className="source-grid-empty-inner">
-            <p className="source-grid-empty-title">仓库还是空的</p>
-            <p className="source-grid-empty-desc">入库 PDF、Markdown 或文本，Meridian 会帮你整理成可检索的知识空间。</p>
+            <p className="source-grid-empty-title">{emptyTitle}</p>
+            <p className="source-grid-empty-desc">{emptyDesc}</p>
             {onAddSource && (
-              <button type="button" className="btn-primary" onClick={onAddSource}>
-                开始入库
+              <button type="button" className="btn-ghost source-grid-empty-cta" onClick={onAddSource}>
+                <Plus size={15} /> 开始入库
               </button>
             )}
           </div>
@@ -138,7 +156,10 @@ export default function SourceGrid({
       ) : (
         <div className="source-grid" role="list">
           {filtered.map((source) => {
-            const readable = readableModalities.has(source.modality);
+            const busy = isSourceBusy(source.status);
+            const failed = source.status === "failed";
+            const ready = !busy && !failed;
+            const readable = readableModalities.has(source.modality) && ready;
             const label = modalityLabels[source.modality] ?? source.modality.toUpperCase();
             const when = formatWhen(source.created_at);
             const selected = selectedId === source.id;
@@ -147,7 +168,9 @@ export default function SourceGrid({
               <article
                 key={source.id}
                 role="listitem"
-                className={`source-grid-card${selected ? " selected" : ""}${readable ? " readable" : ""}`}
+                className={`source-grid-card${selected ? " selected" : ""}${readable ? " readable" : ""}${
+                  busy ? " is-processing" : ""
+                }${failed ? " is-failed" : ""}`}
                 data-modality={source.modality}
                 onClick={() => onSelect(source)}
                 onDoubleClick={() => {
@@ -165,6 +188,13 @@ export default function SourceGrid({
                     <span className="source-grid-modality">{label}</span>
                     {when && <span className="source-grid-when">{when}</span>}
                   </div>
+                  {busy && (
+                    <span className="source-status busy">
+                      <Loader2 size={11} className="spin" />
+                      处理中
+                    </span>
+                  )}
+                  {failed && <span className="source-status fail">失败</span>}
                   <button
                     type="button"
                     className="icon-btn source-grid-more"
@@ -183,7 +213,7 @@ export default function SourceGrid({
                 <p className="source-grid-card-summary">{previewText(source.summary)}</p>
 
                 <footer className="source-grid-card-foot">
-                  <span className="source-grid-stat">{source.chunks} 片段</span>
+                  <span className="source-grid-stat">{footLabel(source)}</span>
                   <div className="source-grid-quick">
                     {readable && (
                       <button
@@ -198,19 +228,26 @@ export default function SourceGrid({
                         <BookOpen size={14} strokeWidth={1.75} />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="source-grid-quick-btn"
-                      title="问 Meridian"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAsk(source);
-                      }}
-                    >
-                      <MessageSquare size={14} strokeWidth={1.75} />
-                    </button>
+                    {ready && (
+                      <button
+                        type="button"
+                        className="source-grid-quick-btn"
+                        title="问 Meridian"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAsk(source);
+                        }}
+                      >
+                        <MessageSquare size={14} strokeWidth={1.75} />
+                      </button>
+                    )}
                   </div>
                 </footer>
+                {busy && (
+                  <div className="source-card-progress" aria-hidden>
+                    <span />
+                  </div>
+                )}
               </article>
             );
           })}
