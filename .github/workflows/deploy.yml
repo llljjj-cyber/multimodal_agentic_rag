@@ -92,8 +92,7 @@ jobs:
             docker compose pull backend frontend
             docker compose up -d
             sleep 10
-            docker image prune -f
-            docker compose ps
+            docker image prune -af
             curl -sf -o /dev/null http://127.0.0.1:8080/
             curl -sf http://127.0.0.1:8080/health
             echo "Smoke check OK"
