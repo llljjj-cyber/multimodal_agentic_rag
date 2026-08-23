@@ -15,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 import crud
 from models import SourceModel
 from services.rag.embedding import _doc_embedding
-from services.rag.embed_with_api import get_bge_m3_embeddings
+from services.rag.embed_with_api import get_bgem3_doc_embeddings
 
 
 CHUNK_SIZE = 600         
@@ -85,7 +85,7 @@ async def add_text_source(
         )
 
         # embed_docs = await run_in_threadpool(_doc_embedding, docs, sparse=False, colbert=False)
-        embed_docs = await get_bge_m3_embeddings(docs)
+        embed_docs = await get_bgem3_doc_embeddings(docs)
         for index, doc in enumerate(embed_docs):
             meta = doc.metadata
             await crud.create_chunk(
@@ -329,7 +329,7 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
             # embed_docs = await run_in_threadpool(
             #         lambda: _doc_embedding(child_docs, sparse=False, colbert=False)
             #     )
-            embed_docs = await get_bge_m3_embeddings(child_docs)
+            embed_docs = await get_bgem3_doc_embeddings(child_docs)
             for index, doc in enumerate(embed_docs):
                 meta = doc.metadata
                 await crud.create_chunk(
