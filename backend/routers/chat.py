@@ -55,12 +55,13 @@ async def stream_chat(
         if conv.adk_session_id != session.id:
             await crud.update_conversation_session(db, conv, session.id)
 
-        runner, _state = build_runner(db, user.id)
+        runner, state = build_runner(db, user.id)
 
         parts: list[str] = []
         saw_partial = False
         final_text = ""
 
+        retrieval_emitted = False
         async for event in stream_agent(
             runner=runner,
             user_id=user.id,
@@ -68,6 +69,11 @@ async def stream_chat(
             question=body.message,
             streaming=True,
         ):
+            if state.last_retrieval and not retrieval_emitted:
+                payload = state.last_retrieval
+                yield f"data: {json.dumps({'type': 'retrieval', **payload}, ensure_ascii=False)}\n\n"
+                retrieval_emitted = True
+
             text = _event_text(event)
             if not text:
                 continue
@@ -83,6 +89,9 @@ async def stream_chat(
                     parts.append(text)
                     yield f"data: {text}\n\n"
 
+        if state.last_retrieval and not retrieval_emitted:
+            yield f"data: {json.dumps({'type': 'retrieval', **state.last_retrieval}, ensure_ascii=False)}\n\n"
+        
         reply = final_text or "".join(parts)
         if reply:
             await crud.create_message(

@@ -32,7 +32,6 @@ frontend/dist/
 frontend/.vite/
 frontend/tsconfig.tsbuildinfo
 
-frontend1
 
 # 本地模型（BGE 等）
 models/
@@ -41,7 +40,7 @@ models/
 
 # 练习
 practice/
-
+finddata
 
 # IDE / 系统
 .vscode/

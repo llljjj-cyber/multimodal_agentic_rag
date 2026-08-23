@@ -115,7 +115,7 @@ async def _source_vector(db: AsyncSession, source: SourceModel) -> list[float]:
 
     vector = [0.0] * DIMENSIONS
     for chunk in chunks:
-        for index, value in enumerate(chunk.vector[: DIMENSIONS]): # 为何要限制维度？
+        for index, value in enumerate(chunk.vector[: DIMENSIONS]): 
             vector[index] += value
     norm = math.sqrt(sum(value * value for value in vector)) or 1.0
     return [value / norm for value in vector]
@@ -151,7 +151,7 @@ async def snapshot(db: AsyncSession, user_id: str, projections: dict[str, dict[s
         for source in sources
     ]
     return {
-        "sources": [SourceOut.model_validate(source) for source in sources],
+        "sources": [SourceOut.model_validate(source).model_dump(mode="json") for source in sources],
         "points": points,
         "dimensions": DIMENSIONS,
         "embedding_model": EMBED_MODEL,

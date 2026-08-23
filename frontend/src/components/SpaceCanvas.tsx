@@ -485,7 +485,7 @@ export default function SpaceCanvas({
       });
       renderer.dispose();
     };
-  }, [points, queryPoint]);
+  }, [points, queryPoint, highlightSourceIds]);
 
   return (
     <div className="space-canvas-wrap">

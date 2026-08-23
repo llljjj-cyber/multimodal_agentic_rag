@@ -111,7 +111,23 @@ async def search_chunks(
             "metadata": {"chunk_id": chunk.id, **chunk.metadata_}
         })
     matches = sorted(chunk_matches, key=lambda item: item["score"], reverse=True)
-    return {"matches": matches}
+    query_id = f"query-{uuid.uuid4().hex[:8]}"
+    source_vectors = await _source_vectors(db, user_id)
+    projections = await run_in_threadpool(
+        lambda: _pca_projection({**source_vectors, query_id: query_vector})
+    )
+    query_point = {
+        "id": query_id,
+        "source_id": "query",
+        "title": query,
+        "modality": "query",
+        "projection": projections.get(query_id, {"x": 0.0, "y": 0.0, "z": 0.0}),
+        "color": MODALITY_COLORS["query"],
+        "score": 1,
+        "preview": "查询向量已投影到当前资料集合中。",
+    }
+    space = await snapshot(db, user_id, projections=projections)
+    return {"query_point": query_point, "matches": matches, "space": space}
 
 
 def retrieval_payload(results: dict[str, Any]) -> dict[str, Any]:

@@ -211,8 +211,26 @@ export function isSourceBusy(status?: SourceStatus) {
   return status === "pending" || status === "processing";
 }
 
+type StreamMeta = {
+  conv_id?: number;
+  type?: string;
+  query_point?: SpacePoint;
+  matches?: Array<{ source_id: string }>;
+  space?: unknown;
+};
+export type SpacePoint = {
+  id: string;
+  source_id: string;
+  title: string;
+  modality: string;
+  projection: { x: number; y: number; z: number };
+  color?: string;
+  preview?: string;
+};
+
 export type StreamPayload =
   | { kind: "conv_id"; convId: number }
+  | { kind: "retrieval"; query_point?: SpacePoint; matches: Array<{ source_id: string }>; space?: unknown }
   | { kind: "text"; text: string }
   | { kind: "done" };
 
@@ -222,9 +240,17 @@ export function parseStreamPayload(raw: string): StreamPayload | null {
   if (payload === "[DONE]") return { kind: "done" };
   if (payload.startsWith("{")) {
     try {
-      const meta = JSON.parse(payload) as { conv_id?: number };
+      const meta = JSON.parse(payload) as StreamMeta;
       if (typeof meta.conv_id === "number") {
         return { kind: "conv_id", convId: meta.conv_id };
+      }
+      if (meta.type === "retrieval") {
+        return {
+          kind: "retrieval",
+          query_point: meta.query_point,
+          matches: meta.matches ?? [],
+          space: meta.space,
+        };
       }
     } catch {
       return { kind: "text", text: payload };

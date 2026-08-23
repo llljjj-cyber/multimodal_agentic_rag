@@ -41,6 +41,13 @@ const TOKEN_KEY = "mar2_access_token";
 const USER_KEY = "mar2_username";
 const WAREHOUSE_VIEW_KEY = "mar2_warehouse_view";
 
+function randomId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function readWarehouseView(): WarehouseView {
   return localStorage.getItem(WAREHOUSE_VIEW_KEY) === "grid" ? "grid" : "spatial";
 }
@@ -159,6 +166,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [renamingConvId, setRenamingConvId] = useState<number | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [queryPoint, setQueryPoint] = useState<SpacePoint | null>(null);
+  const [highlightSourceIds, setHighlightSourceIds] = useState<Set<string>>(() => new Set());
   const [ingestJobs, setIngestJobs] = useState<IngestJob[]>([]);
 
   const allSources = space?.sources ?? [];
@@ -171,7 +180,6 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     () => (space?.points ?? []).filter((p) => p.modality === "query" || filteredSourceIds.has(p.source_id)),
     [space?.points, filteredSourceIds],
   );
-  const emptyHighlightIds = useMemo(() => new Set<string>(), []);
   const shelfCounts = useMemo(() => {
     const map: Record<string, number> = { all: allSources.length, inbox: 0 };
     for (const shelf of shelves) map[shelf.id] = 0;
@@ -372,7 +380,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   }
 
   function handleIngest(input: IngestInput) {
-    const jobId = crypto.randomUUID();
+    const jobId = randomId();
     const title =
       input.kind === "file"
         ? input.title
@@ -554,6 +562,12 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         if (payload.kind === "conv_id") {
           nextConvId = payload.convId;
           setActiveConvId(payload.convId);
+        } else if (payload.kind === "retrieval") {
+          if (payload.space) setSpace(normalizeSpace(payload.space));
+          setQueryPoint(payload.query_point ?? null);
+          setHighlightSourceIds(new Set(payload.matches.map((m) => m.source_id)));
+          setWarehouseView("spatial");
+          if (!isReading && layoutMode === "warehouse") setLayoutMode("balanced");
         } else if (payload.kind === "text") {
           assembled += payload.text;
           setStreamingText(assembled);
@@ -604,6 +618,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     setMessages([]);
     setDraft("");
     setStreamingText("");
+    setQueryPoint(null);
+    setHighlightSourceIds(new Set());
   }
 
   function requestDeleteConv(convId: number) {
@@ -703,8 +719,8 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                 <>
                   <SpaceCanvas
                     points={filteredPoints}
-                    queryPoint={null}
-                    highlightSourceIds={emptyHighlightIds}
+                    queryPoint={queryPoint}
+                    highlightSourceIds={highlightSourceIds}
                     selectedId={selectedPoint?.id ?? null}
                     hoveredId={hoveredPoint?.id ?? null}
                     onSelect={handleSelectPoint}
