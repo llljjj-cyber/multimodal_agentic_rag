@@ -1,20 +1,25 @@
 import os
-from typing import Any
 
+import httpx
 from FlagEmbedding import BGEM3FlagModel
 from langchain_core.documents import Document
 from dotenv import load_dotenv
+from starlette.concurrency import run_in_threadpool
 
 
 load_dotenv()
 
+
+BATCH_SIZE = 20
+API_KEY = os.getenv("SILICONFLOW_API_KEY")
+BGE_MODEL_PATH = os.getenv("BGE_MODEL_PATH")
 
 _model = None
 
 def get_model():
     global _model
     if _model is None:
-        _model = BGEM3FlagModel(os.getenv("BGE_MODEL_PATH"),  use_fp16=False)
+        _model = BGEM3FlagModel(BGE_MODEL_PATH,  use_fp16=False)
     return _model
 
 def _doc_embedding(
@@ -69,3 +74,86 @@ def _text_embedding(
         "sparse": result["lexical_weights"] if sparse else None,
         "colbert": result["colbert_vecs"].tolist() if colbert else None
     }
+
+async def _doc_embeddings_with_api(documents: list[Document], batch_size: int = BATCH_SIZE):
+    """只支持dense向量"""
+    url = "https://api.siliconflow.cn/v1/embeddings"
+    
+    if not API_KEY:
+        raise ValueError("SILICONFLOW_API_KEY is not set")
+    
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    for i in range(0, len(documents), batch_size):
+        batch = [doc for doc in documents[i: i + batch_size]]
+        batch_texts = [doc.page_content for doc in batch]
+        payload = {
+            "model": "BAAI/bge-m3",
+            "input": batch_texts,                 
+            "encoding_format": "float",     
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        items = sorted(data["data"], key=lambda x: x["index"])
+        vectors = [item["embedding"] for item in items]
+        for j, doc in enumerate(batch):
+            doc.metadata["dense"] = vectors[j]
+            doc.metadata["sparse"] = None
+            doc.metadata["colbert"] = None
+    return documents
+
+async def _text_embeddings_with_api(text: str):
+    """只支持dense向量"""
+    url = "https://api.siliconflow.cn/v1/embeddings"
+    
+    if not API_KEY:
+        raise ValueError("SILICONFLOW_API_KEY is not set")
+    
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": "BAAI/bge-m3",
+        "input": text,
+        "encoding_format": "float",
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+    return {
+        "dense": data["data"][0]["embedding"],
+        "sparse":  None,
+        "colbert": None
+    }
+    
+
+async def get_bgem3_doc_embeddings(
+    documents: list[Document], 
+    dense: bool = True, 
+    sparse: bool = True, 
+    colbert: bool = True,
+    batch_size: int = BATCH_SIZE):
+    if API_KEY:
+        return await _doc_embeddings_with_api(documents, batch_size)
+    return await run_in_threadpool(_doc_embedding, documents, dense=dense, sparse=sparse, colbert=colbert, batch_size=batch_size)
+
+async def get_bgem3_text_embeddings(
+    text: str,
+    dense: bool = True, 
+    sparse: bool = True, 
+    colbert: bool = True):
+    if API_KEY:
+        return await _text_embeddings_with_api(text)
+    return await run_in_threadpool(_text_embedding, text, dense=dense, sparse=sparse, colbert=colbert)

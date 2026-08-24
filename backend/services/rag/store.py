@@ -14,8 +14,7 @@ from starlette.concurrency import run_in_threadpool
 
 import crud
 from models import SourceModel
-from services.rag.embedding import _doc_embedding
-from services.rag.embed_with_api import get_bgem3_doc_embeddings
+from services.rag.embedding import get_bgem3_doc_embeddings
 
 
 CHUNK_SIZE = 600         
@@ -24,7 +23,7 @@ MIN_CHUNK_CHARS = 30
 MAX_EMBED_CHARS = 2000
 PARENT_CATEGORIES = {"Title"}
 CHILD_CATEGORIES = {"NarrativeText", "Text", "Table", "ListItem", "UncategorizedText"}
-SKIP_PATTERNS = ("Wikipedia",)
+SKIP_PATTERNS = ()
 
 
 # 入库 text 路径
@@ -71,7 +70,10 @@ async def add_text_source(
     modality: str = "text", 
     saved_path: str | None = None,
     file: bool = False, 
-    docs: list[Document] | None = None) -> SourceModel:
+    docs: list[Document] | None = None,
+    dense: bool = True,
+    sparse: bool = False,
+    colbert: bool = False) -> SourceModel:
     if not file:
         docs = await run_in_threadpool(_text_to_documents, title, text)
     try:
@@ -84,8 +86,7 @@ async def add_text_source(
             saved_path=saved_path,
         )
 
-        # embed_docs = await run_in_threadpool(_doc_embedding, docs, sparse=False, colbert=False)
-        embed_docs = await get_bgem3_doc_embeddings(docs)
+        embed_docs = await get_bgem3_doc_embeddings(docs, dense, sparse, colbert)
         for index, doc in enumerate(embed_docs):
             meta = doc.metadata
             await crud.create_chunk(
@@ -253,20 +254,13 @@ def _parent_child_doc_from_md(file_path: str) -> tuple[list[Document], list[Docu
         mode="elements"
     )
     docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=MAX_EMBED_CHARS,
-        chunk_overlap=100,
-        length_function=len,
-        separators=["\n\n", "\n", "。", "！", "？", ". ", " ", ""],
-        is_separator_regex=False
-    )
     ex_docs: list[Document] = []
     for doc in docs:
         if (
             doc.metadata.get("category") not in PARENT_CATEGORIES
-            and len(doc.page_content) > MAX_EMBED_CHARS
+            and len(doc.page_content) > CHUNK_SIZE
         ):
-            ex_docs.extend(splitter.split_documents([doc]))
+            ex_docs.extend(_text_splitter.split_documents([doc]))
         else:
             ex_docs.append(doc)
     parent_docs, child_docs = build_parent_child_documents(ex_docs)
@@ -278,7 +272,16 @@ def load_txt_file(file_path: str) -> list[Document]:
     return docs
 
 # markdown, pdf 文件添加
-async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modality: Literal["md", "pdf", "txt"], title: str | None = None):
+async def add_file_source(
+    db: AsyncSession, 
+    user_id: str, 
+    saved_path: str, 
+    modality: Literal["md", "pdf", "txt"], 
+    title: str | None = None,
+    dense: bool = True,
+    sparse: bool = False,
+    colbert: bool = False
+    ):
     if modality.lower() == "txt":
         docs = await run_in_threadpool(load_txt_file, saved_path) 
         if not docs:
@@ -290,7 +293,10 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
             modality="txt",
             file=True,
             docs=docs,
-            saved_path=saved_path
+            saved_path=saved_path,
+            dense=dense,
+            sparse=sparse,
+            colbert=colbert
         )
     else:
         if modality.lower() == "pdf":
@@ -326,10 +332,7 @@ async def add_file_source(db: AsyncSession, user_id: str, saved_path: str, modal
                     child_count=p.metadata.get("child_count"),
                 )
 
-            # embed_docs = await run_in_threadpool(
-            #         lambda: _doc_embedding(child_docs, sparse=False, colbert=False)
-            #     )
-            embed_docs = await get_bgem3_doc_embeddings(child_docs)
+            embed_docs = await get_bgem3_doc_embeddings(child_docs, dense, sparse, colbert)
             for index, doc in enumerate(embed_docs):
                 meta = doc.metadata
                 await crud.create_chunk(

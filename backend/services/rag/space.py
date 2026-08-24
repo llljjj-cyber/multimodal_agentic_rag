@@ -23,15 +23,6 @@ MODALITY_COLORS = {
 }
 
 
-def _blend_vectors(primary: list[float], secondary: list[float], secondary_weight: float = 0.32) -> list[float]:
-    primary_weight = 1.0 - secondary_weight
-    blended = [
-        (left * primary_weight) + (right * secondary_weight)
-        for left, right in zip(primary, secondary)
-    ]
-    norm = math.sqrt(sum(value * value for value in blended)) or 1.0
-    return [value / norm for value in blended]
-
 
 def _dot(left: list[float], right: list[float]) -> float:
     return sum(a * b for a, b in zip(left, right))

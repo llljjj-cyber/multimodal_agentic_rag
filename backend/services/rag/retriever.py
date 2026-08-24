@@ -6,8 +6,7 @@ from starlette.concurrency import run_in_threadpool
 
 import crud
 from models import ChunkModel, SourceModel
-from services.rag.embedding import _text_embedding
-from services.rag.embed_with_api import get_bgem3_text_embeddings
+from services.rag.embedding import get_bgem3_text_embeddings
 from services.rag.space import snapshot, _source_vectors, _pca_projection
 
 
@@ -23,11 +22,17 @@ MODALITY_COLORS = {
 }
 
 
-async def search_sources(db: AsyncSession, user_id: str, query: str, top_k: int = 6) -> dict[str, Any]:
-    # query_vector = (
-    #     await run_in_threadpool(_text_embedding, query)
-    # ).get("dense", None)
-    query_vector = await get_bgem3_text_embeddings(query)
+async def search_sources(
+    db: AsyncSession, 
+    user_id: str, 
+    query: str, 
+    top_k: int = 6,
+    dense: bool = True,
+    sparse: bool = False,
+    colbert: bool = False
+    ) -> dict[str, Any]:
+    result = await get_bgem3_text_embeddings(query, dense, sparse, colbert)
+    query_vector = result.get("dense") if isinstance(result, dict) else result
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
     query_id = f"query-{uuid.uuid4().hex[:8]}"
@@ -80,11 +85,8 @@ async def search_chunks(
     sparse: bool = False,
     colbert: bool = False
     ) -> dict[str, Any]:
-    # 暂时只支持dense向量搜索
-    # query_vector = (await run_in_threadpool(
-    #     lambda: _text_embedding(query, dense=dense, sparse=sparse, colbert=colbert)
-    # )).get("dense", None)
-    query_vector = await get_bgem3_text_embeddings(query)
+    query_result = await get_bgem3_text_embeddings(query, dense, sparse, colbert)
+    query_vector = query_result.get("dense") if isinstance(query_result, dict) else query_result
     if query_vector is None:
         raise ValueError("Dense vector is required for search")
     result: list[tuple[ChunkModel, float]] = await crud.search_chunks(db, user_id, query_vector, top_k)
