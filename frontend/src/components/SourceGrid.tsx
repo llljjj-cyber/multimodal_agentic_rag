@@ -1,4 +1,14 @@
-import { BookOpen, Loader2, MessageSquare, MoreHorizontal, Plus, Search } from "lucide-react";
+import {
+  BookOpen,
+  CheckSquare,
+  Loader2,
+  MessageSquare,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Square,
+  X,
+} from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { isSourceBusy, type SourceStatus } from "../api";
 
@@ -30,6 +40,14 @@ type Props = {
   onContextMenu: (source: GridSource, position: { x: number; y: number }) => void;
   onAddSource?: () => void;
   viewSwitch?: ReactNode;
+  batchMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleBatchMode?: () => void;
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
+  onOpenBatchMoveMenu?: (position: { x: number; y: number }) => void;
+  batchMoving?: boolean;
 };
 
 function formatWhen(value?: string) {
@@ -65,6 +83,14 @@ export default function SourceGrid({
   onContextMenu,
   onAddSource,
   viewSwitch,
+  batchMode = false,
+  selectedIds,
+  onToggleBatchMode,
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
+  onOpenBatchMoveMenu,
+  batchMoving = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -95,6 +121,14 @@ export default function SourceGrid({
     });
     return sorted;
   }, [sources, query, sortKey, modalityLabels]);
+
+  const selectableIds = useMemo(
+    () => filtered.filter((s) => !isSourceBusy(s.status)).map((s) => s.id),
+    [filtered],
+  );
+  const selectedCount = selectedIds?.size ?? 0;
+  const allFilteredSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds?.has(id));
 
   if (sources.length === 0) {
     return (
@@ -142,7 +176,55 @@ export default function SourceGrid({
               ? `${sources.length} 份`
               : `${filtered.length} / ${sources.length} 份`}
           </span>
+          {onToggleBatchMode && (
+            <button
+              type="button"
+              className={`btn-ghost btn-sm source-grid-batch-toggle${batchMode ? " active" : ""}`}
+              onClick={onToggleBatchMode}
+              disabled={batchMoving}
+            >
+              <CheckSquare size={14} />
+              {batchMode ? "退出整理" : "批量整理"}
+            </button>
+          )}
         </div>
+        {batchMode && (
+          <div className="source-grid-batch-bar">
+            <span className="source-grid-batch-count">
+              {batchMoving ? "正在移动…" : `已选 ${selectedCount} 份`}
+            </span>
+            <div className="source-grid-batch-actions">
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                onClick={onSelectAll}
+                disabled={batchMoving || selectableIds.length === 0}
+              >
+                {allFilteredSelected ? "取消全选" : "全选当前"}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                disabled={batchMoving || selectedCount === 0}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onOpenBatchMoveMenu?.({ x: rect.left, y: rect.bottom + 6 });
+                }}
+              >
+                移动到…
+              </button>
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                onClick={onClearSelection}
+                disabled={batchMoving || selectedCount === 0}
+                aria-label="取消选择"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
         {viewSwitch}
       </div>
 
@@ -163,25 +245,51 @@ export default function SourceGrid({
             const label = modalityLabels[source.modality] ?? source.modality.toUpperCase();
             const when = formatWhen(source.created_at);
             const selected = selectedId === source.id;
+            const batchSelected = selectedIds?.has(source.id) ?? false;
+            const batchSelectable = batchMode && !busy;
 
             return (
               <article
                 key={source.id}
                 role="listitem"
-                className={`source-grid-card${selected ? " selected" : ""}${readable ? " readable" : ""}${
-                  busy ? " is-processing" : ""
-                }${failed ? " is-failed" : ""}`}
+                className={`source-grid-card${selected && !batchMode ? " selected" : ""}${
+                  batchSelected ? " batch-selected" : ""
+                }${readable ? " readable" : ""}${busy ? " is-processing" : ""}${failed ? " is-failed" : ""}${
+                  batchMode ? " batch-mode" : ""
+                }`}
                 data-modality={source.modality}
-                onClick={() => onSelect(source)}
+                onClick={() => {
+                  if (batchMode && batchSelectable) {
+                    onToggleSelect?.(source.id);
+                    return;
+                  }
+                  onSelect(source);
+                }}
                 onDoubleClick={() => {
+                  if (batchMode) return;
                   if (readable) onOpen(source);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  if (batchMode) return;
                   onContextMenu(source, { x: e.clientX, y: e.clientY });
                 }}
               >
                 <div className="source-grid-card-accent" aria-hidden />
+                {batchMode && (
+                  <button
+                    type="button"
+                    className={`source-grid-check${batchSelected ? " checked" : ""}`}
+                    disabled={!batchSelectable || batchMoving}
+                    aria-label={batchSelected ? "取消选择" : "选择"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (batchSelectable) onToggleSelect?.(source.id);
+                    }}
+                  >
+                    {batchSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                )}
                 <header className="source-grid-card-head">
                   <span className={`source-dot ${source.modality}`}>{label.slice(0, 2)}</span>
                   <div className="source-grid-card-meta">
@@ -195,18 +303,20 @@ export default function SourceGrid({
                     </span>
                   )}
                   {failed && <span className="source-status fail">失败</span>}
-                  <button
-                    type="button"
-                    className="icon-btn source-grid-more"
-                    title="更多操作"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      onContextMenu(source, { x: rect.left, y: rect.bottom + 4 });
-                    }}
-                  >
-                    <MoreHorizontal size={16} />
-                  </button>
+                  {!batchMode && (
+                    <button
+                      type="button"
+                      className="icon-btn source-grid-more"
+                      title="更多操作"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        onContextMenu(source, { x: rect.left, y: rect.bottom + 4 });
+                      }}
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
+                  )}
                 </header>
 
                 <h3 className="source-grid-card-title">{source.title}</h3>

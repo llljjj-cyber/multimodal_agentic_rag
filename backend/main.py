@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI) -> None:
     yield
 
 app = FastAPI(
-    title="个人资料助手 · 多模态 Agentic RAG",
+    title="个人资料助手 · Agentic RAG",
     version="0.1.0",
     lifespan=lifespan)
 

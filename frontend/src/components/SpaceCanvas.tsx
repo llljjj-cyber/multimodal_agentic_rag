@@ -16,7 +16,8 @@ export type SpacePoint = {
 type Props = {
   points: SpacePoint[];
   queryPoint?: SpacePoint | null;
-  highlightSourceIds?: Set<string>;
+  /** source_id → 相对命中强度 0~1；空 Map 表示无检索态 */
+  highlightScores?: Map<string, number>;
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (point: SpacePoint | null) => void;
@@ -60,6 +61,26 @@ const DEFAULT_CAMERA = {
 
 const DRAG_THRESHOLD_PX = 6;
 const POINT_SCALE = 1.35;
+const FADED_OPACITY = 0.16;
+const IDLE_OPACITY = 0.92;
+
+type HitTier = {
+  opacity: number;
+  scale: number;
+  haloScale: number;
+  haloOpacity: number;
+};
+
+/** 按相对分数分三档亮度 */
+function hitTier(normalizedScore: number): HitTier {
+  if (normalizedScore >= 0.67) {
+    return { opacity: 1, scale: 1.55, haloScale: 0.72, haloOpacity: 0.38 };
+  }
+  if (normalizedScore >= 0.33) {
+    return { opacity: 0.88, scale: 1.32, haloScale: 0.55, haloOpacity: 0.28 };
+  }
+  return { opacity: 0.72, scale: 1.15, haloScale: 0.42, haloOpacity: 0.2 };
+}
 
 function indexFromId(id: string) {
   return Array.from(id).reduce((total, char) => total + char.charCodeAt(0), 0);
@@ -128,7 +149,7 @@ function pointerNdc(event: PointerEvent, rect: DOMRect, out: THREE.Vector2) {
 export default function SpaceCanvas({
   points,
   queryPoint,
-  highlightSourceIds,
+  highlightScores,
   selectedId = null,
   hoveredId = null,
   onSelect,
@@ -141,7 +162,7 @@ export default function SpaceCanvas({
   const pointMapRef = useRef<Map<string, SpacePoint>>(new Map());
   const selectedIdRef = useRef<string | null>(selectedId);
   const hoveredIdRef = useRef<string | null>(hoveredId);
-  const highlightRef = useRef<Set<string> | undefined>(highlightSourceIds);
+  const highlightRef = useRef<Map<string, number>>(highlightScores ?? new Map());
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const onContextMenuRef = useRef(onContextMenu);
@@ -155,8 +176,8 @@ export default function SpaceCanvas({
   }, [hoveredId]);
 
   useEffect(() => {
-    highlightRef.current = highlightSourceIds;
-  }, [highlightSourceIds]);
+    highlightRef.current = highlightScores ?? new Map();
+  }, [highlightScores]);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -202,6 +223,8 @@ export default function SpaceCanvas({
 
     const glowTexture = makeGlowTexture();
     const allPoints = queryPoint ? [...points, queryPoint] : points;
+    const scores = highlightRef.current;
+    const hasHits = scores.size > 0;
     pointMapRef.current = new Map(allPoints.map((point) => [point.id, point]));
     const { positions: laidOut, radius } = layoutPoints(allPoints);
     const framed = allPoints.length > 0 ? cameraForRadius(radius) : DEFAULT_CAMERA;
@@ -214,9 +237,7 @@ export default function SpaceCanvas({
 
     const frameGroup = new THREE.Group();
     const pointGroup = new THREE.Group();
-    const linkGroup = new THREE.Group();
     scene.add(frameGroup);
-    scene.add(linkGroup);
     scene.add(pointGroup);
 
     const grid = new THREE.GridHelper(10, 20, MERIDIAN.accent, MERIDIAN.gridMinor);
@@ -256,8 +277,6 @@ export default function SpaceCanvas({
     const pointer = new THREE.Vector2();
     const meshes: THREE.Mesh[] = [];
     const halos: THREE.Sprite[] = [];
-    const linkLines: THREE.Line[] = [];
-    const meshBySourceId = new Map<string, THREE.Mesh>();
     const objectsById = new Map<
       string,
       { halo?: THREE.Sprite; base: THREE.Vector3; orbit: number; phase: number; speed: number }
@@ -276,70 +295,61 @@ export default function SpaceCanvas({
     allPoints.forEach((point, index) => {
       const position = laidOut[index] ?? new THREE.Vector3();
       const isQuery = point.modality === "query";
-      const isMatched = highlightRef.current?.has(point.source_id) ?? false;
+      const hitScore = scores.get(point.source_id);
+      const isHit = hitScore != null;
       const color = pointColor(point);
+      const tier = isHit ? hitTier(hitScore) : null;
 
-      if (isQuery || isMatched) {
+      // query 始终有光晕；命中点按分档加光晕；非命中不加点光晕（避免淡化后仍抢眼）
+      if (isQuery || isHit) {
         const haloMaterial = new THREE.SpriteMaterial({
           map: glowTexture,
           color: new THREE.Color(isQuery ? MERIDIAN.query : color),
           transparent: true,
-          opacity: isQuery ? 0.34 : 0.22,
+          opacity: isQuery ? 0.36 : (tier?.haloOpacity ?? 0.22),
           depthWrite: false,
         });
         const halo = new THREE.Sprite(haloMaterial);
         halo.position.copy(position);
-        halo.scale.setScalar(isQuery ? 0.76 : 0.58);
-        halo.userData.baseScale = isQuery ? 0.76 : 0.58;
-        halo.userData.baseOpacity = isQuery ? 0.34 : 0.22;
+        const haloScale = isQuery ? 0.8 : (tier?.haloScale ?? 0.5);
+        halo.scale.setScalar(haloScale);
+        halo.userData.baseScale = haloScale;
+        halo.userData.baseOpacity = isQuery ? 0.36 : (tier?.haloOpacity ?? 0.22);
         halo.userData.id = point.id;
         halos.push(halo);
         pointGroup.add(halo);
       }
 
+      let opacity = IDLE_OPACITY;
+      if (isQuery) opacity = 1;
+      else if (hasHits && isHit) opacity = tier!.opacity;
+      else if (hasHits) opacity = FADED_OPACITY;
+
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(isQuery ? 0.09 : 0.08, 24, 24),
+        new THREE.SphereGeometry(isQuery ? 0.095 : 0.08, 24, 24),
         new THREE.MeshBasicMaterial({
           color: new THREE.Color(color),
           transparent: true,
-          opacity: isQuery ? 1 : 0.92,
+          opacity,
+          depthWrite: false,
         }),
       );
       mesh.position.copy(position);
       mesh.userData.id = point.id;
       mesh.userData.sourceId = point.source_id;
+      mesh.userData.isQuery = isQuery;
+      mesh.userData.baseOpacity = opacity;
+      mesh.userData.hitScale = isQuery ? 1.2 : isHit ? tier!.scale : 1;
       meshes.push(mesh);
       pointGroup.add(mesh);
-      meshBySourceId.set(point.source_id, mesh);
       objectsById.set(point.id, {
         halo: halos.find((item) => item.userData.id === point.id),
         base: position.clone(),
-        orbit: isQuery ? 0.024 : 0.06 + (indexFromId(point.id) % 5) * 0.01,
+        orbit: isQuery ? 0.024 : hasHits && !isHit ? 0 : 0.06 + (indexFromId(point.id) % 5) * 0.01,
         phase: (indexFromId(point.id) % 13) * 0.62,
         speed: isQuery ? 0.24 : 0.3 + (indexFromId(point.id) % 7) * 0.03,
       });
     });
-
-    if (queryPoint) {
-      const queryMesh = meshBySourceId.get(queryPoint.source_id);
-      if (queryMesh) {
-        highlightRef.current?.forEach((sourceId) => {
-          const target = meshBySourceId.get(sourceId);
-          if (!target || sourceId === queryPoint.source_id) return;
-          const geometry = new THREE.BufferGeometry().setFromPoints([
-            queryMesh.position.clone(),
-            target.position.clone(),
-          ]);
-          const line = new THREE.Line(
-            geometry,
-            new THREE.LineBasicMaterial({ color: MERIDIAN.accent, transparent: true, opacity: 0.22 }),
-          );
-          line.userData.targetSourceId = sourceId;
-          linkLines.push(line);
-          linkGroup.add(line);
-        });
-      }
-    }
 
     const pickPoint = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -419,7 +429,7 @@ export default function SpaceCanvas({
 
       meshes.forEach((mesh, index) => {
         const object = objectsById.get(mesh.userData.id);
-        if (object && orbiting) {
+        if (object && orbiting && object.orbit > 0) {
           const theta = frame * object.speed + object.phase;
           const bob = Math.sin(frame * object.speed * 1.7 + object.phase) * object.orbit * 0.35;
           mesh.position.set(
@@ -429,20 +439,18 @@ export default function SpaceCanvas({
           );
           object.halo?.position.copy(mesh.position);
         }
-        const pulse = 1 + Math.sin(frame * 2.2 + index) * 0.045;
+
         const active =
           mesh.userData.id === selectedIdRef.current || mesh.userData.id === hoveredIdRef.current;
-        mesh.scale.setScalar(active ? 1.24 : pulse);
-      });
+        const hitScale = (mesh.userData.hitScale as number) || 1;
+        const pulse = mesh.userData.isQuery || hitScale > 1.05
+          ? 1 + Math.sin(frame * 2.2 + index) * 0.03
+          : 1 + Math.sin(frame * 2.2 + index) * 0.045;
+        mesh.scale.setScalar(active ? Math.max(hitScale, 1.4) * 1.08 : hitScale * pulse);
 
-      linkLines.forEach((line) => {
-        const sourceMesh = queryPoint ? meshBySourceId.get(queryPoint.source_id) : undefined;
-        const targetMesh = meshBySourceId.get(String(line.userData.targetSourceId));
-        if (!sourceMesh || !targetMesh) return;
-        const positions = line.geometry.getAttribute("position") as THREE.BufferAttribute;
-        positions.setXYZ(0, sourceMesh.position.x, sourceMesh.position.y, sourceMesh.position.z);
-        positions.setXYZ(1, targetMesh.position.x, targetMesh.position.y, targetMesh.position.z);
-        positions.needsUpdate = true;
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        const baseOpacity = (mesh.userData.baseOpacity as number) ?? IDLE_OPACITY;
+        material.opacity = active ? Math.min(1, Math.max(baseOpacity, 0.85)) : baseOpacity;
       });
 
       halos.forEach((halo, index) => {
@@ -452,7 +460,7 @@ export default function SpaceCanvas({
         const material = halo.material as THREE.SpriteMaterial;
         const active =
           halo.userData.id === selectedIdRef.current || halo.userData.id === hoveredIdRef.current;
-        material.opacity = active ? 0.48 : halo.userData.baseOpacity;
+        material.opacity = active ? 0.5 : halo.userData.baseOpacity;
       });
 
       renderer.render(scene, camera);
@@ -485,7 +493,7 @@ export default function SpaceCanvas({
       });
       renderer.dispose();
     };
-  }, [points, queryPoint, highlightSourceIds]);
+  }, [points, queryPoint, highlightScores]);
 
   return (
     <div className="space-canvas-wrap">
@@ -520,6 +528,9 @@ export default function SpaceCanvas({
               <span className="legend-dot" style={{ background: MODALITY_COLORS.query }} />
               查询
             </span>
+          )}
+          {(highlightScores?.size ?? 0) > 0 && (
+            <span className="legend-item legend-muted">亮点=命中 · 暗点=未命中</span>
           )}
         </div>
       </div>

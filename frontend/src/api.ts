@@ -211,11 +211,21 @@ export function isSourceBusy(status?: SourceStatus) {
   return status === "pending" || status === "processing";
 }
 
+export type RetrievalMatch = {
+  source_id: string;
+  score?: number;
+};
+
 type StreamMeta = {
   conv_id?: number;
   type?: string;
   query_point?: SpacePoint;
-  matches?: Array<{ source_id: string }>;
+  matches?: Array<{
+    source_id?: string;
+    id?: string;
+    score?: number;
+    similarity?: number;
+  }>;
   space?: unknown;
 };
 export type SpacePoint = {
@@ -230,9 +240,28 @@ export type SpacePoint = {
 
 export type StreamPayload =
   | { kind: "conv_id"; convId: number }
-  | { kind: "retrieval"; query_point?: SpacePoint; matches: Array<{ source_id: string }>; space?: unknown }
+  | { kind: "retrieval"; query_point?: SpacePoint; matches: RetrievalMatch[]; space?: unknown }
   | { kind: "text"; text: string }
   | { kind: "done" };
+
+function normalizeRetrievalMatches(
+  matches: StreamMeta["matches"],
+): RetrievalMatch[] {
+  if (!matches?.length) return [];
+  const out: RetrievalMatch[] = [];
+  for (const m of matches) {
+    const sourceId = m.source_id || m.id;
+    if (!sourceId) continue;
+    const score =
+      typeof m.score === "number"
+        ? m.score
+        : typeof m.similarity === "number"
+          ? m.similarity
+          : undefined;
+    out.push({ source_id: String(sourceId), score });
+  }
+  return out;
+}
 
 export function parseStreamPayload(raw: string): StreamPayload | null {
   const payload = raw.trim();
@@ -248,7 +277,7 @@ export function parseStreamPayload(raw: string): StreamPayload | null {
         return {
           kind: "retrieval",
           query_point: meta.query_point,
-          matches: meta.matches ?? [],
+          matches: normalizeRetrievalMatches(meta.matches),
           space: meta.space,
         };
       }

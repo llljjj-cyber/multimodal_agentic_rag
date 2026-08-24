@@ -25,6 +25,7 @@ import {
 import AuthScreen from "./components/AuthScreen";
 import ButlerPanel, { type LayoutMode } from "./components/ButlerPanel";
 import ConfirmDialog from "./components/ConfirmDialog";
+import BatchMoveShelfMenu from "./components/BatchMoveShelfMenu";
 import CreateShelfDialog from "./components/CreateShelfDialog";
 import IngestToastStack, { type IngestJob } from "./components/IngestToastStack";
 import LibrarySheet from "./components/LibrarySheet";
@@ -167,8 +168,12 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [queryPoint, setQueryPoint] = useState<SpacePoint | null>(null);
-  const [highlightSourceIds, setHighlightSourceIds] = useState<Set<string>>(() => new Set());
+  const [highlightScores, setHighlightScores] = useState<Map<string, number>>(() => new Map());
   const [ingestJobs, setIngestJobs] = useState<IngestJob[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(() => new Set());
+  const [batchMoveMenu, setBatchMoveMenu] = useState<{ x: number; y: number } | null>(null);
+  const [batchMoving, setBatchMoving] = useState(false);
 
   const allSources = space?.sources ?? [];
   const filteredSources = useMemo(
@@ -287,6 +292,19 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     }, 2500);
     return () => window.clearInterval(id);
   }, [space?.sources, refreshSpace]);
+
+  useEffect(() => {
+    if (!batchMode) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setBatchMode(false);
+        setBatchSelectedIds(new Set());
+        setBatchMoveMenu(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [batchMode]);
 
   useEffect(() => {
     refreshConversations().catch(() => undefined);
@@ -518,6 +536,71 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     }
   }
 
+  function toggleBatchMode() {
+    setBatchMode((on) => {
+      if (on) {
+        setBatchSelectedIds(new Set());
+        setBatchMoveMenu(null);
+      }
+      return !on;
+    });
+    setContextMenu(null);
+  }
+
+  function toggleBatchSelect(sourceId: string) {
+    setBatchSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sourceId)) next.delete(sourceId);
+      else next.add(sourceId);
+      return next;
+    });
+  }
+
+  function handleBatchSelectAll() {
+    const selectable = filteredSources.filter((s) => !isSourceBusy(s.status)).map((s) => s.id);
+    const allSelected = selectable.length > 0 && selectable.every((id) => batchSelectedIds.has(id));
+    if (allSelected) {
+      setBatchSelectedIds(new Set());
+      return;
+    }
+    setBatchSelectedIds(new Set(selectable));
+  }
+
+  async function handleBatchMoveToShelf(shelfId: string | null) {
+    const ids = [...batchSelectedIds];
+    if (ids.length === 0) return;
+    setBatchMoveMenu(null);
+    setBatchMoving(true);
+    setError("");
+    const succeeded = new Set<string>();
+    let fail = 0;
+    try {
+      for (const sourceId of ids) {
+        try {
+          const data = await moveSourceToShelf(token, sourceId, shelfId);
+          if (data.space) setSpace(normalizeSpace(data.space));
+          succeeded.add(sourceId);
+        } catch (err) {
+          fail += 1;
+          handleAuthFailure(err);
+        }
+      }
+      await refreshShelves();
+      setBatchSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of succeeded) next.delete(id);
+        return next;
+      });
+      if (fail === 0) {
+        setBatchMode(false);
+      } else {
+        setError(`已移动 ${succeeded.size} 份，${fail} 份失败`);
+      }
+    } finally {
+      setBatchMoving(false);
+    }
+  }
+
   async function handleCreateShelf(name: string) {
     setError("");
     setCreatingShelf(true);
@@ -565,7 +648,28 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         } else if (payload.kind === "retrieval") {
           if (payload.space) setSpace(normalizeSpace(payload.space));
           setQueryPoint(payload.query_point ?? null);
-          setHighlightSourceIds(new Set(payload.matches.map((m) => m.source_id)));
+          {
+            const scores = new Map<string, number>();
+            const values = payload.matches
+              .map((m) => m.score)
+              .filter((s): s is number => typeof s === "number");
+            const maxScore = values.length ? Math.max(...values) : 1;
+            const minScore = values.length ? Math.min(...values) : 0;
+            const span = Math.max(maxScore - minScore, 1e-6);
+            payload.matches.forEach((m, index) => {
+              // 无分数时按排名近似：越靠前越高
+              const raw =
+                typeof m.score === "number"
+                  ? m.score
+                  : 1 - index / Math.max(payload.matches.length, 1);
+              // 相对分档 0~1，便于高亮亮度
+              const normalized = values.length
+                ? (raw - minScore) / span
+                : raw;
+              scores.set(m.source_id, Math.min(1, Math.max(0, normalized)));
+            });
+            setHighlightScores(scores);
+          }
           setWarehouseView("spatial");
           if (!isReading && layoutMode === "warehouse") setLayoutMode("balanced");
         } else if (payload.kind === "text") {
@@ -619,7 +723,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     setDraft("");
     setStreamingText("");
     setQueryPoint(null);
-    setHighlightSourceIds(new Set());
+    setHighlightScores(new Map());
   }
 
   function requestDeleteConv(convId: number) {
@@ -672,21 +776,21 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
           </div>
           <div className="vault-toolbar">
             <div className="layout-switch" role="group" aria-label="布局模式">
-              <button type="button" className={layoutMode === "balanced" ? "active" : ""} onClick={() => setLayoutMode("balanced")} title="均衡">
-                <LayoutGrid size={15} /> 均衡
+              <button type="button" className={layoutMode === "balanced" ? "active" : ""} onClick={() => setLayoutMode("balanced")} title="均衡" aria-label="均衡布局">
+                <LayoutGrid size={16} />
               </button>
-              <button type="button" className={layoutMode === "chat" ? "active" : ""} onClick={() => setLayoutMode("chat")} title="全屏对话">
-                <MessageSquare size={15} /> 对话
+              <button type="button" className={layoutMode === "chat" ? "active" : ""} onClick={() => setLayoutMode("chat")} title="全屏对话" aria-label="全屏对话">
+                <MessageSquare size={16} />
               </button>
-              <button type="button" className={layoutMode === "warehouse" ? "active" : ""} onClick={() => setLayoutMode("warehouse")} title="专注仓库">
-                <Package size={15} /> 仓库
+              <button type="button" className={layoutMode === "warehouse" ? "active" : ""} onClick={() => setLayoutMode("warehouse")} title="专注仓库" aria-label="专注仓库">
+                <Package size={16} />
               </button>
             </div>
-            <span className="meta-chip">🙂 {username}</span>
-            <span className="meta-chip">{sourceCount} 资料</span>
+            <span className="vault-toolbar-divider" aria-hidden />
+            <span className="meta-chip meta-chip--user" title={username}>🙂 {username}</span>
             <button
               type="button"
-              className="btn-ghost"
+              className="btn-primary vault-ingest-btn"
               onClick={openLibrary}
               title={
                 activeShelfName
@@ -696,7 +800,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
             >
               <Plus size={15} /> 入库
             </button>
-            <button type="button" className="icon-btn" onClick={onLogout} title="退出"><LogOut size={16} /></button>
+            <button type="button" className="icon-btn" onClick={onLogout} title="退出" aria-label="退出"><LogOut size={16} /></button>
           </div>
         </header>
       )}
@@ -720,7 +824,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                   <SpaceCanvas
                     points={filteredPoints}
                     queryPoint={queryPoint}
-                    highlightSourceIds={highlightSourceIds}
+                    highlightScores={highlightScores}
                     selectedId={selectedPoint?.id ?? null}
                     hoveredId={hoveredPoint?.id ?? null}
                     onSelect={handleSelectPoint}
@@ -814,6 +918,14 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                   onAsk={askAboutSource}
                   onContextMenu={handleGridContextMenu}
                   onAddSource={openLibrary}
+                  batchMode={batchMode}
+                  selectedIds={batchSelectedIds}
+                  batchMoving={batchMoving}
+                  onToggleBatchMode={toggleBatchMode}
+                  onToggleSelect={toggleBatchSelect}
+                  onSelectAll={handleBatchSelectAll}
+                  onClearSelection={() => setBatchSelectedIds(new Set())}
+                  onOpenBatchMoveMenu={(pos) => setBatchMoveMenu(pos)}
                   viewSwitch={
                     <WarehouseViewSwitch
                       variant="toolbar"
@@ -850,6 +962,17 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
                     setContextMenu(null);
                   }}
                   onClose={() => setContextMenu(null)}
+                />
+              )}
+              {batchMoveMenu && (
+                <BatchMoveShelfMenu
+                  x={batchMoveMenu.x}
+                  y={batchMoveMenu.y}
+                  shelves={shelves}
+                  onMove={(shelfId) => {
+                    void handleBatchMoveToShelf(shelfId);
+                  }}
+                  onClose={() => setBatchMoveMenu(null)}
                 />
               )}
           </section>
