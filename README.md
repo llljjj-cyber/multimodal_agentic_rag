@@ -1,8 +1,9 @@
 # Meridian · Agentic RAG
 
 个人资料仓库 + 伴读助手。支持文本 / 网页 / PDF·MD·TXT 入库，BGE-M3 向量检索，Google ADK Agent 流式对话。
+本项目参考了 [multimodal_agentic_rag](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/main/rag_tutorials/multimodal_agentic_rag) 的实现思路。
 
-**线上演示：** [http://8.138.96.81:8080](http://8.138.96.81:8080)  (演示账号：meridian / 密码：meridian)
+**线上演示：** [http://8.138.96.81:8080](http://8.138.96.81:8080)  (演示账号：meri / 密码：meridian)
 
 ## 技术栈
 
