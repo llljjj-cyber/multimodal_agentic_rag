@@ -21,6 +21,7 @@
 
 ## 项目结构
 
+```
 multimodal_agentic_rag/
 ├── asset/                      # 启动与环境配置文档
 ├── backend/
@@ -36,6 +37,7 @@ multimodal_agentic_rag/
 │       └── components/         # SpaceCanvas / ButlerPanel / SourceReader 等
 ├── docker-compose.yml
 └── .github/workflows/deploy.yml
+```
 
 ## 快速开始
 
