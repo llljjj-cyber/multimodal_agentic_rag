@@ -1,15 +1,16 @@
 """
-RAG 检索评测脚本（不依赖 HTTP，直接调用 RAG_STORE.search）。
+RAG 检索评测脚本（不依赖 HTTP，直接调用 search_chunks）。
 
 用法（在 backend 目录、已激活 .venv 且数据库有资料时）：
-  python eval_rag.py
-  python eval_rag.py --golden eval/golden.json --username ljlkjj --top-k 6
-  python eval_rag.py --ragas   # 需 pip install ragas datasets
+  python eval/eval_rag.py
+  python eval/eval_rag.py --golden eval/golden.example.json --username meridian --top-k 6
+  python eval/eval_rag.py --ragas   # 需 pip install ragas datasets
 
 指标说明：
-  - title_hit：Top-K 里是否出现期望资料标题（子串匹配）
-  - keyword_hit：Top-K 合并文本是否包含全部 expected_keywords
-  - ragas（可选）：context recall 等，需 reference_answer 且安装 ragas
+  - title_hit：Top-K 命中片段所属资料的 source.title 是否匹配 expected_source_title
+  - keyword_hit：Top-K 合并文本（含 parent 回填）是否包含全部 expected_keywords
+  - ragas（可选）：context recall / precision，需 reference_answer
+  - 若复现请注释 retriever.py 中 search_chunks 所标记的代码，以加速评估
 """
 
 from __future__ import annotations
@@ -25,6 +26,11 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+load_dotenv(BACKEND_ROOT / ".env")
 load_dotenv()
 
 import crud
@@ -32,7 +38,9 @@ from database import async_session
 from services.rag.retriever import search_chunks
 
 
-DEFAULT_GOLDEN = Path(__file__).resolve().parent / "eval" / "golden.example.json"
+EVAL_DIR = Path(__file__).resolve().parent
+DEFAULT_GOLDEN = EVAL_DIR / "golden.example.json"
+TITLE_SUFFIXES = (".pdf", ".md", ".txt", ".markdown")
 
 
 async def _user_id_for_username(username: str) -> str:
@@ -61,12 +69,46 @@ def load_cases(path: Path) -> list[dict[str, Any]]:
     return cases
 
 
-def check_title_hit(matches: list[dict[str, Any]], expected_title: str) -> tuple[bool, list[str]]:
-    titles = [str(m.get("title") or "") for m in matches]
+def normalize_title(title: str) -> str:
+    """去掉扩展名并小写，便于文件名与入库标题互相比对。"""
+    text = title.strip().lower()
+    for suffix in TITLE_SUFFIXES:
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+            break
+    return text.strip()
+
+
+def titles_match(expected: str, actual: str) -> bool:
+    """双向子串：期望名可出现在实际标题中，或实际标题出现在期望名中。"""
+    exp = normalize_title(expected)
+    act = normalize_title(actual)
+    if not exp or not act:
+        return False
+    return exp in act or act in exp
+
+
+def resolve_source_titles(
+    matches: list[dict[str, Any]],
+    source_title_by_id: dict[str, str],
+) -> list[str]:
+    """检索返回的 title 多为章节名；按 source_id 回查资料标题。"""
+    titles: list[str] = []
+    for match in matches:
+        source_id = str(match.get("source_id") or "")
+        source_title = source_title_by_id.get(source_id) or ""
+        if source_title:
+            titles.append(source_title)
+        else:
+            # 兜底：无 source 映射时仍展示 chunk title，避免明细空白
+            titles.append(str(match.get("title") or ""))
+    return titles
+
+
+def check_title_hit(source_titles: list[str], expected_title: str) -> bool:
     if not expected_title.strip():
-        return True, titles
-    hit = any(expected_title in title for title in titles)
-    return hit, titles
+        return True
+    return any(titles_match(expected_title, title) for title in source_titles if title)
 
 
 def check_keyword_hit(matches: list[dict[str, Any]], keywords: list[str]) -> bool:
@@ -74,6 +116,11 @@ def check_keyword_hit(matches: list[dict[str, Any]], keywords: list[str]) -> boo
         return True
     blob = "\n".join(str(m.get("text") or "") for m in matches)
     return all(kw in blob for kw in keywords)
+
+
+async def _load_source_titles(db, user_id: str) -> dict[str, str]:
+    sources = await crud.list_sources_by_user_id(db, user_id)
+    return {source.id: source.title for source in sources}
 
 
 async def evaluate_retrieval(
@@ -84,6 +131,10 @@ async def evaluate_retrieval(
     user_id = await _user_id_for_username(username)
     results: list[CaseResult] = []
     async with async_session() as db:
+        source_title_by_id = await _load_source_titles(db, user_id)
+        if not source_title_by_id:
+            print(f"警告：用户 {username} 名下暂无资料，title_hit / keyword_hit 可能全为 0。")
+
         for case in cases:
             question = str(case.get("question") or "").strip()
             if not question:
@@ -94,7 +145,8 @@ async def evaluate_retrieval(
                 matches = retrieval.get("matches") or []
                 expected_title = str(case.get("expected_source_title") or "")
                 keywords = [str(k) for k in (case.get("expected_keywords") or []) if str(k).strip()]
-                title_hit, titles = check_title_hit(matches, expected_title)
+                source_titles = resolve_source_titles(matches, source_title_by_id)
+                title_hit = check_title_hit(source_titles, expected_title)
                 keyword_hit = check_keyword_hit(matches, keywords)
                 top_score = float(matches[0].get("score") or 0) if matches else 0.0
                 results.append(
@@ -102,7 +154,7 @@ async def evaluate_retrieval(
                         question=question,
                         title_hit=title_hit,
                         keyword_hit=keyword_hit,
-                        matched_titles=titles[:top_k],
+                        matched_titles=source_titles[:top_k],
                         top_score=top_score,
                     )
                 )
@@ -121,13 +173,16 @@ async def evaluate_retrieval(
 def print_report(results: list[CaseResult], top_k: int) -> None:
     total = len(results)
     errors = sum(1 for r in results if r.error)
+    valid = total - errors
     title_hits = sum(1 for r in results if r.title_hit and not r.error)
     keyword_hits = sum(1 for r in results if r.keyword_hit and not r.error)
+    both_hits = sum(1 for r in results if r.title_hit and r.keyword_hit and not r.error)
 
     print("\n=== RAG 检索评测 ===")
     print(f"样本数: {total}  |  Top-K: {top_k}")
-    print(f"标题命中: {title_hits}/{total - errors}  ({_pct(title_hits, total - errors)})")
-    print(f"关键词命中: {keyword_hits}/{total - errors}  ({_pct(keyword_hits, total - errors)})")
+    print(f"标题命中 (source.title): {title_hits}/{valid}  ({_pct(title_hits, valid)})")
+    print(f"关键词命中: {keyword_hits}/{valid}  ({_pct(keyword_hits, valid)})")
+    print(f"双指标同时命中: {both_hits}/{valid}  ({_pct(both_hits, valid)})")
     if errors:
         print(f"失败: {errors}")
 
@@ -139,7 +194,7 @@ def print_report(results: list[CaseResult], top_k: int) -> None:
             continue
         print(f"  title_hit={row.title_hit}  keyword_hit={row.keyword_hit}  top_score={row.top_score}")
         if row.matched_titles:
-            print(f"  titles: {row.matched_titles}")
+            print(f"  source_titles: {row.matched_titles}")
 
 
 def _pct(num: int, denom: int) -> str:
@@ -155,14 +210,14 @@ async def run_ragas(
 ) -> None:
     try:
         from ragas import EvaluationDataset, evaluate
-        from ragas.metrics import LLMContextRecall, LLMContextPrecisionWithReference
+        from ragas.metrics import LLMContextPrecisionWithReference, LLMContextRecall
     except ImportError as exc:
         print("\n跳过 RAGAS：请先安装  pip install ragas datasets")
         raise SystemExit(1) from exc
 
     user_id = await _user_id_for_username(username)
     llm = _build_ragas_llm()
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     async with async_session() as db:
         for case in cases:
             question = str(case.get("question") or "").strip()
@@ -187,16 +242,16 @@ async def run_ragas(
 
     dataset = EvaluationDataset.from_list(rows)
     metrics = [
-    LLMContextRecall(),
-    LLMContextPrecisionWithReference(),
-]
+        LLMContextRecall(),
+        LLMContextPrecisionWithReference(),
+    ]
     result = evaluate(dataset=dataset, metrics=metrics, llm=llm)
-    print("\n=== RAGAS (LLMContextRecall) ===")
+    print("\n=== RAGAS (LLMContextRecall / Precision) ===")
     print(result)
 
 
 def _build_ragas_llm():
-    """优先 Gemini；若配置了中转 OpenAI 兼容地址则走 base_url。"""
+    """优先走 OpenAI 兼容中转；否则用 Google GenAI。"""
     from ragas.llms import llm_factory
 
     base_url = (os.getenv("RAGAS_BASE_URL") or "").strip()
@@ -229,8 +284,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--username",
-        default=os.getenv("EVAL_USERNAME", "lj"),
-        help="评测使用的登录用户名（需已入库资料）",
+        default=os.getenv("EVAL_USERNAME", "meridian"),
+        help="评测使用的登录用户名（需已入库资料，默认 meridian）",
     )
     parser.add_argument("--top-k", type=int, default=6, help="检索 Top-K")
     parser.add_argument("--ragas", action="store_true", help="额外跑 RAGAS LLMContextRecall")
@@ -239,16 +294,24 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = parse_args()
-    if not args.golden.exists():
-        print(f"找不到评测文件：{args.golden}", file=sys.stderr)
-        print("可复制 eval/golden.example.json 为 eval/golden.json 并修改。", file=sys.stderr)
-        raise SystemExit(1)
+    golden = args.golden if args.golden.is_absolute() else (Path.cwd() / args.golden).resolve()
+    if not golden.exists() and args.golden == DEFAULT_GOLDEN:
+        golden = DEFAULT_GOLDEN
+    if not golden.exists():
+        # 相对路径再试脚本同目录
+        alt = EVAL_DIR / args.golden.name
+        if alt.exists():
+            golden = alt
+        else:
+            print(f"找不到评测文件：{args.golden}", file=sys.stderr)
+            print("可复制 eval/golden.example.json 为 eval/golden.json 并修改。", file=sys.stderr)
+            raise SystemExit(1)
 
-    cases = load_cases(args.golden)
-    print(f"加载 {len(cases)} 条评测 | user={args.username} | golden={args.golden.name}")
+    cases = load_cases(golden)
+    print(f"加载 {len(cases)} 条评测 | user={args.username} | golden={golden.name}")
 
-    # results = await evaluate_retrieval(args.username, cases, args.top_k)
-    # print_report(results, args.top_k)
+    results = await evaluate_retrieval(args.username, cases, args.top_k)
+    print_report(results, args.top_k)
 
     if args.ragas:
         await run_ragas(args.username, cases, args.top_k)

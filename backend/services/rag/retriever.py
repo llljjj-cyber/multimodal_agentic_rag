@@ -68,11 +68,11 @@ async def search_sources(
 
         }
     matches = sorted(source_matches.values(), key=lambda item: item["score"], reverse=True)[:top_k]
-    space = await snapshot(db, user_id, projections=projections)
+    space = await snapshot(db, user_id, projections=projections)    
     return {
         "query_point": query_point,
         "matches": matches,
-        "space": space
+        "space": space  
         }
 
 
@@ -131,8 +131,12 @@ async def search_chunks(
         "score": 1,
         "preview": "查询向量已投影到当前资料集合中。",
     }
-    space = await snapshot(db, user_id, projections=projections)
-    return {"query_point": query_point, "matches": matches, "space": space}
+    space = await snapshot(db, user_id, projections=projections) # 注释
+    return {
+        "query_point": query_point, 
+        "matches": matches, 
+        "space": space  # 注释
+        }
 
 
 def retrieval_payload(results: dict[str, Any]) -> dict[str, Any]:
