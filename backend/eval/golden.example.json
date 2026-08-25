@@ -1,405 +1,125 @@
 {
-  "description": "数学相关PDF文档问答测试集",
+  "description": "测试集，包含万科、海康威视、国家发展改革委、中华人民共和国残疾人保障法等公司的报告和法律法规，共20个案例",
   "cases": [
     {
-      "question": "复旦大学这份模拟卷里高等代数考了哪些题型？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "高等代数"
-      ],
-      "reference_answer": "根据2021年复旦大学高等数学模拟卷的说明，该卷注明'线性代数部分也未给出'，因此PDF中未包含任何高等代数（线性代数）的题型内容。"
+      "question": "根据万科2024年第三季度报告，2024年1-9月公司累计实现合同销售面积和合同销售金额分别是多少？同比变化如何？",
+      "expected_source_title": "000002_万科A_2024报告.pdf",
+      "expected_keywords": ["合同销售面积", "合同销售金额", "同比增减"],
+      "reference_answer": "报告显示，2024年1-9月，本集团累计实现合同销售面积1,330.8万平方米，合同销售金额1,812.0亿元，同比分别下降26.8%和35.4%。"
     },
     {
-      "question": "数学分析里关于极限的定义是什么？",
-      "expected_source_title": "数学分析",
-      "expected_keywords": [
-        "极限"
-      ],
-      "reference_answer": "PDF中未提供极限的严格定义性表述。2021年复旦大学模拟卷第1题是一道极限计算题（求lim_{t→x}(sin t/sin x)^{x/(sin t-sin x)}并求间断点），属于极限的应用而非定义阐述。博士数学论坛帖子中也未找到极限定义的正式说明。"
+      "question": "截至2024年9月30日，万科持有的货币资金是多少？有息负债合计是多少？净负债率和剔除预收款的资产负债率分别是多少？",
+      "expected_source_title": "000002_万科A_2024报告.pdf",
+      "expected_keywords": ["货币资金", "有息负债", "净负债率", "剔除预收款的资产负债率"],
+      "reference_answer": "截至9月底，本集团有息负债合计3,276.1亿元，其中一年以上有息负债占比为64.4%；净负债率为66.2%，剔除预收款的资产负债率为65.4%，较年初下降0.1个百分点；持有的货币资金为797.5亿元。"
     },
     {
-      "question": "2021年复旦大学数学模拟卷主要包含哪些数学科目？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "数学"
-      ],
-      "reference_answer": "根据2021年复旦大学数学模拟卷的具体内容描述，通常包括数学分析、高等代数等核心数学科目。"
+      "question": "万科2024年1-9月经营服务业务全口径收入是多少？同比增长多少？",
+      "expected_source_title": "000002_万科A_2024报告.pdf",
+      "expected_keywords": ["经营服务业务", "全口径收入", "同比增长"],
+      "reference_answer": "报告指出，1-9月，经营服务业务全口径收入430.8亿元，同比增长6.3%。"
     },
     {
-      "question": "复旦大学数学考试中数学分析部分的重点内容有哪些？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "数学分析"
-      ],
-      "reference_answer": "根据试卷内容，数学分析部分通常涵盖极限理论、微分学、积分学、级数等重点内容。"
+      "question": "截至2024年9月30日，万科泊寓共运营管理多少间长租公寓？开业多少间？出租率是多少？",
+      "expected_source_title": "000002_万科A_2024报告.pdf",
+      "expected_keywords": ["泊寓", "长租公寓", "开业间数", "出租率"],
+      "reference_answer": "截至9月底，泊寓共运营管理24.7万间长租公寓，开业18.7万间，出租率94.9%。"
     },
     {
-      "question": "高等代数在复旦大学数学考试中占什么比重？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "高等代数"
-      ],
-      "reference_answer": "根据试卷结构分析，高等代数通常是复旦大学数学考试的重要组成部分，与数学分析并列为核心科目。"
+      "question": "万科2024年1-9月合并报表新增融资与再融资总额是多少？新增融资综合成本是多少？经营性物业贷落地金额是多少？",
+      "expected_source_title": "000002_万科A_2024报告.pdf",
+      "expected_keywords": ["新增融资", "融资综合成本", "经营性物业贷"],
+      "reference_answer": "1-9月合并报表新增融资与再融资774亿元，新增融资综合成本3.58%，经营性物业贷合计落地262亿，其中合并报表范围内新增187亿。"
     },
     {
-      "question": "博士数学论坛2003-2009年的帖子主要讨论哪些数学问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "数学"
-      ],
-      "reference_answer": "根据论坛帖子内容，主要讨论高等代数、数学分析、概率论等研究生阶段的数学问题。"
+      "question": "根据海康威视2024年半年度报告，公司2024年上半年实现营业收入和归属于上市公司股东的净利润分别是多少？同比变化如何？",
+      "expected_source_title": "002415_海康威视_2024报告.pdf",
+      "expected_keywords": ["营业收入", "归属于上市公司股东的净利润", "同比增减"],
+      "reference_answer": "报告显示，2024年上半年公司实现营业收入412.09亿元，比上年同期增长9.68%；实现归属于上市公司股东的净利润50.64亿元，比上年同期下降5.13%。"
     },
     {
-      "question": "2004-2009年博士数学论坛中关于极限理论的讨论有哪些要点？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "极限"
-      ],
-      "reference_answer": "论坛帖子中关于极限理论的讨论主要集中在极限定义、性质及其在数学分析中的应用。"
+      "question": "海康威视2024年上半年创新业务整体收入是多少？占公司营收比重达到多少？同比增长幅度是多少？",
+      "expected_source_title": "002415_海康威视_2024报告.pdf",
+      "expected_keywords": ["创新业务", "收入", "营收比重", "同比增长"],
+      "reference_answer": "报告期内，创新业务整体收入103.28亿元，同比增长26.13%，占公司营收比重达到25.06%。"
     },
     {
-      "question": "博士数学论坛帖子中提到的高等代数难点是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "高等代数"
-      ],
-      "reference_answer": "根据论坛讨论，高等代数的难点主要集中在矩阵理论、线性空间、特征值与特征向量等内容。"
+      "question": "截至2024年6月30日，海康威视的第一大股东是谁？持股比例和持股数量是多少？",
+      "expected_source_title": "002415_海康威视_2024报告.pdf",
+      "expected_keywords": ["第一大股东", "中电海康集团有限公司", "持股比例"],
+      "reference_answer": "截至报告期末，海康威视第一大股东为中电海康集团有限公司，持股比例为36.55%，持股数量为3,410,150,909股。"
     },
     {
-      "question": "微积分在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "微分"
-      ],
-      "reference_answer": "根据论坛帖子内容，微积分主要涉及微分和积分等核心概念。"
+      "question": "海康威视2024年上半年研发投入金额是多少？同比增长百分比是多少？",
+      "expected_source_title": "002415_海康威视_2024报告.pdf",
+      "expected_keywords": ["研发投入", "研发费用", "同比增长"],
+      "reference_answer": "报告显示，2024年上半年公司研发投入56.98亿元，同比增长7.81%。"
     },
     {
-      "question": "博士数学论坛中如何讨论微积分中的积分问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "积分"
-      ],
-      "reference_answer": "论坛帖子中对微积分的积分进行了深入探讨，分析了其理论基础和解题方法。"
+      "question": "海康威视2024年上半年经营活动产生的现金流量净额是多少？与上年同期相比变化如何？主要原因是什么？",
+      "expected_source_title": "002415_海康威视_2024报告.pdf",
+      "expected_keywords": ["经营活动产生的现金流量净额", "同比增减", "采购支付"],
+      "reference_answer": "报告期内，经营活动产生的现金流量净额为-1.90亿元，上年同期为10.26亿元，同比下降118.49%，主要原因是本期采购支付的现金增加。"
     },
     {
-      "question": "线性代数在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "矩阵"
-      ],
-      "reference_answer": "根据论坛帖子内容，线性代数主要涉及矩阵和行列式等核心概念。"
+      "question": "根据国家发展改革委2024年政府信息公开工作年度报告，2024年全年通过门户网站主动公开各类信息多少件？其中政策文件有多少件？",
+      "expected_source_title": "国家发展改革委2024年政府信息公开工作年度报告.pdf",
+      "expected_keywords": ["主动公开", "门户网站", "政策文件"],
+      "reference_answer": "报告显示，2024年全年通过门户网站主动公开各类信息229件，其中各类政策文件133件。"
     },
     {
-      "question": "博士数学论坛中如何讨论线性代数中的行列式问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "行列式"
-      ],
-      "reference_answer": "论坛帖子中对线性代数的行列式进行了深入探讨，分析了其理论基础和解题方法。"
+      "question": "国家发展改革委2024年全年收到政府信息公开申请共多少件？主要申请方式有哪些？申请事项主要集中在哪些方面？",
+      "expected_source_title": "国家发展改革委2024年政府信息公开工作年度报告.pdf",
+      "expected_keywords": ["依申请公开", "申请方式", "申请事项"],
+      "reference_answer": "2024年全年收到公民、法人和其他组织政府信息公开申请共567件。从申请方式看，网络申请379件、信函申请185件、当面申请3件；申请事项主要集中在重大基础设施、公共服务价格等方面。"
     },
     {
-      "question": "概率论在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "概率"
-      ],
-      "reference_answer": "根据论坛帖子内容，概率论主要涉及概率和统计等核心概念。"
+      "question": "国家发展改革委2024年共制定出台规章和行政规范性文件各多少件？",
+      "expected_source_title": "国家发展改革委2024年政府信息公开工作年度报告.pdf",
+      "expected_keywords": ["规章", "行政规范性文件", "制定出台"],
+      "reference_answer": "2024年，国家发展改革委共制定出台规章19部、行政规范性文件21件。"
     },
     {
-      "question": "博士数学论坛中如何讨论概率论中的统计问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "统计"
-      ],
-      "reference_answer": "论坛帖子中对概率论的统计进行了深入探讨，分析了其理论基础和解题方法。"
+      "question": "国家发展改革委2024年在门户网站建设和政务新媒体建设方面取得了哪些成效？",
+      "expected_source_title": "国家发展改革委2024年政府信息公开工作年度报告.pdf",
+      "expected_keywords": ["门户网站", "政务新媒体", "浏览量", "粉丝数量"],
+      "reference_answer": "门户网站浏览量近亿次、访客数量增长21%；政务新媒体账号粉丝数量达2800万，全年新增阅读量突破12亿次。"
     },
     {
-      "question": "实分析在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "测度"
-      ],
-      "reference_answer": "根据论坛帖子内容，实分析主要涉及测度和勒贝格积分等核心概念。"
+      "question": "国家发展改革委2024年度向申请人收取政府信息公开信息处理费共计多少元？",
+      "expected_source_title": "国家发展改革委2024年政府信息公开工作年度报告.pdf",
+      "expected_keywords": ["信息处理费", "收费", "200元"],
+      "reference_answer": "国家发展改革委2024年度向申请人收取政府信息公开信息处理费共计200元。"
     },
     {
-      "question": "博士数学论坛中如何讨论实分析中的勒贝格积分问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "勒贝格积分"
-      ],
-      "reference_answer": "论坛帖子中对实分析的勒贝格积分进行了深入探讨，分析了其理论基础和解题方法。"
+      "question": "根据《中华人民共和国残疾人保障法》，残疾人的定义是什么？残疾人包括哪些类别？",
+      "expected_source_title": "中华人民共和国残疾人保障法.pdf",
+      "expected_keywords": ["残疾人定义", "视力残疾", "听力残疾", "言语残疾", "肢体残疾", "智力残疾", "精神残疾", "多重残疾"],
+      "reference_answer": "残疾人是指在心理、生理、人体结构上，某种组织、功能丧失或者不正常，全部或者部分丧失以正常方式从事某种活动能力的人。残疾人包括视力残疾、听力残疾、言语残疾、肢体残疾、智力残疾、精神残疾、多重残疾和其他残疾的人。"
     },
     {
-      "question": "复分析在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "复数"
-      ],
-      "reference_answer": "根据论坛帖子内容，复分析主要涉及复数和解析函数等核心概念。"
+      "question": "根据《中华人民共和国残疾人保障法》，国家实行什么制度来安排残疾人就业？用人单位未达到规定比例应如何处理？",
+      "expected_source_title": "中华人民共和国残疾人保障法.pdf",
+      "expected_keywords": ["按比例安排残疾人就业", "国家机关", "企业事业单位", "民办非企业单位"],
+      "reference_answer": "国家实行按比例安排残疾人就业制度。国家机关、社会团体、企业事业单位、民办非企业单位应当按照规定的比例安排残疾人就业，并为其选择适当的工种和岗位。达不到规定比例的，按照国家有关规定履行保障残疾人就业义务。国家鼓励用人单位超过规定比例安排残疾人就业。"
     },
     {
-      "question": "博士数学论坛中如何讨论复分析中的解析函数问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "解析函数"
-      ],
-      "reference_answer": "论坛帖子中对复分析的解析函数进行了深入探讨，分析了其理论基础和解题方法。"
+      "question": "根据《中华人民共和国残疾人保障法》，盲人可以享受哪些公共交通和邮寄方面的优惠？",
+      "expected_source_title": "中华人民共和国残疾人保障法.pdf",
+      "expected_keywords": ["盲人", "免费乘车", "盲人读物", "免费寄递"],
+      "reference_answer": "盲人持有效证件免费乘坐市内公共汽车、电车、地铁、渡船等公共交通工具。盲人读物邮件免费寄递。"
     },
     {
-      "question": "泛函分析在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "巴拿赫空间"
-      ],
-      "reference_answer": "根据论坛帖子内容，泛函分析主要涉及巴拿赫空间和希尔伯特空间等核心概念。"
+      "question": "根据《中华人民共和国残疾人保障法》，全国助残日定在哪一天？",
+      "expected_source_title": "中华人民共和国残疾人保障法.pdf",
+      "expected_keywords": ["全国助残日", "5月", "第三个星期日"],
+      "reference_answer": "每年5月的第三个星期日为全国助残日。"
     },
     {
-      "question": "博士数学论坛中如何讨论泛函分析中的希尔伯特空间问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "希尔伯特空间"
-      ],
-      "reference_answer": "论坛帖子中对泛函分析的希尔伯特空间进行了深入探讨，分析了其理论基础和解题方法。"
-    },
-    {
-      "question": "拓扑学在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "开集"
-      ],
-      "reference_answer": "根据论坛帖子内容，拓扑学主要涉及开集和连续映射等核心概念。"
-    },
-    {
-      "question": "博士数学论坛中如何讨论拓扑学中的连续映射问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "连续映射"
-      ],
-      "reference_answer": "论坛帖子中对拓扑学的连续映射进行了深入探讨，分析了其理论基础和解题方法。"
-    },
-    {
-      "question": "数论在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "素数"
-      ],
-      "reference_answer": "根据论坛帖子内容，数论主要涉及素数和同余等核心概念。"
-    },
-    {
-      "question": "博士数学论坛中如何讨论数论中的同余问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "同余"
-      ],
-      "reference_answer": "论坛帖子中对数论的同余进行了深入探讨，分析了其理论基础和解题方法。"
-    },
-    {
-      "question": "微分几何在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "曲线"
-      ],
-      "reference_answer": "根据论坛帖子内容，微分几何主要涉及曲线和曲面等核心概念。"
-    },
-    {
-      "question": "博士数学论坛中如何讨论微分几何中的曲面问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "曲面"
-      ],
-      "reference_answer": "论坛帖子中对微分几何的曲面进行了深入探讨，分析了其理论基础和解题方法。"
-    },
-    {
-      "question": "抽象代数在研究生数学考试中的主要内容是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "群论"
-      ],
-      "reference_answer": "根据论坛帖子内容，抽象代数主要涉及群论和环论等核心概念。"
-    },
-    {
-      "question": "博士数学论坛中如何讨论抽象代数中的环论问题？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "环论"
-      ],
-      "reference_answer": "论坛帖子中对抽象代数的环论进行了深入探讨，分析了其理论基础和解题方法。"
-    },
-    {
-      "question": "复旦大学数学模拟卷的题型结构是怎样的？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "题型"
-      ],
-      "reference_answer": "根据模拟卷内容，题型通常包括选择题、填空题和解答题等多种形式。"
-    },
-    {
-      "question": "2021年复旦大学数学模拟卷难度如何？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "难度"
-      ],
-      "reference_answer": "根据试卷内容分析，2021年模拟卷难度适中，既考查基础知识也包含一定难度的综合题。"
-    },
-    {
-      "question": "复旦大学数学考试时间分配建议是什么？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "考试"
-      ],
-      "reference_answer": "根据模拟卷题量和难度，建议合理分配时间，确保各部分题目都有充足时间完成。"
-    },
-    {
-      "question": "复旦大学数学模拟卷的评分标准是怎样的？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "评分"
-      ],
-      "reference_answer": "根据试卷说明，评分注重解题过程的严谨性和答案的准确性。"
-    },
-    {
-      "question": "博士数学论坛和复旦大学模拟卷在数学分析考点上有何异同？",
-      "expected_source_title": "博士数学论坛,复旦大学",
-      "expected_keywords": [
-        "数学分析"
-      ],
-      "reference_answer": "两者都重视数学分析的基础理论，但论坛更注重深入讨论，模拟卷更侧重考查应用能力。"
-    },
-    {
-      "question": "2003-2009年和2004-2009年博士数学论坛帖子内容有何区别？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "论坛"
-      ],
-      "reference_answer": "两个时间段的论坛帖子在讨论热点和问题深度上可能存在差异，反映了不同时期的研究重点。"
-    },
-    {
-      "question": "研究生入学考试数学科目备考策略有哪些？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "备考"
-      ],
-      "reference_answer": "根据论坛经验分享，备考应注重基础理论掌握和大量练习相结合。"
-    },
-    {
-      "question": "数学专业研究生需要掌握的核心课程是什么？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "课程"
-      ],
-      "reference_answer": "核心课程通常包括数学分析、高等代数、概率论与数理统计等。"
-    },
-    {
-      "question": "复旦大学数学系研究生培养方案有什么特点？",
-      "expected_source_title": "复旦大学",
-      "expected_keywords": [
-        "培养"
-      ],
-      "reference_answer": "根据培养方案介绍，注重理论基础与实践应用并重。"
-    },
-    {
-      "question": "数学论文写作中需要注意哪些格式规范？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "论文"
-      ],
-      "reference_answer": "数学论文写作需遵循严格的逻辑推理和证明格式规范。"
-    },
-    {
-      "question": "如何理解微分几何中的曲线概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "曲线"
-      ],
-      "reference_answer": "根据论坛讨论，曲线是微分几何中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解抽象代数中的群论概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "群论"
-      ],
-      "reference_answer": "根据论坛讨论，群论是抽象代数中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解微积分中的微分概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "微分"
-      ],
-      "reference_answer": "根据论坛讨论，微分是微积分中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解线性代数中的矩阵概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "矩阵"
-      ],
-      "reference_answer": "根据论坛讨论，矩阵是线性代数中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解概率论中的概率概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "概率"
-      ],
-      "reference_answer": "根据论坛讨论，概率是概率论中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解实分析中的测度概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "测度"
-      ],
-      "reference_answer": "根据论坛讨论，测度是实分析中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解复分析中的复数概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "复数"
-      ],
-      "reference_answer": "根据论坛讨论，复数是复分析中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解泛函分析中的巴拿赫空间概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "巴拿赫空间"
-      ],
-      "reference_answer": "根据论坛讨论，巴拿赫空间是泛函分析中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解拓扑学中的开集概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "开集"
-      ],
-      "reference_answer": "根据论坛讨论，开集是拓扑学中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解数论中的素数概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "素数"
-      ],
-      "reference_answer": "根据论坛讨论，素数是数论中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解微分几何中的曲线概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "曲线"
-      ],
-      "reference_answer": "根据论坛讨论，曲线是微分几何中的基础概念，需要从定义和实例两方面理解。"
-    },
-    {
-      "question": "如何理解抽象代数中的群论概念？",
-      "expected_source_title": "博士数学论坛",
-      "expected_keywords": [
-        "群论"
-      ],
-      "reference_answer": "根据论坛讨论，群论是抽象代数中的基础概念，需要从定义和实例两方面理解。"
+      "question": "根据《中华人民共和国残疾人保障法》，普通教育机构在招收残疾学生方面有哪些法定义务？违反规定会面临什么处罚？",
+      "expected_source_title": "中华人民共和国残疾人保障法.pdf",
+      "expected_keywords": ["普通教育机构", "招收残疾学生", "拒绝招收", "责令改正"],
+      "reference_answer": "普通小学、初级中等学校，必须招收能适应其学习生活的残疾儿童、少年入学；普通高级中等学校、中等职业学校和高等学校，必须招收符合国家规定的录取要求的残疾考生入学，不得因其残疾而拒绝招收。违反本法规定，有关教育机构拒不接收残疾学生入学，或者在国家规定的录取要求以外附加条件限制残疾学生就学的，由有关主管部门责令改正，并依法对直接负责的主管人员和其他直接责任人员给予处分。"
     }
-  ]
+    ]
 }

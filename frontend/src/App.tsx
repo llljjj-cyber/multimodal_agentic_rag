@@ -4,12 +4,14 @@ import {
   apiFetch,
   createShelf,
   deleteConversation,
+  deleteShelf,
   deleteSource,
   ingestSource,
   isSourceBusy,
   listShelves,
   moveSourceToShelf,
   renameConversation,
+  renameShelf,
   renameSource,
   listConversations,
   listMessages,
@@ -30,6 +32,7 @@ import CreateShelfDialog from "./components/CreateShelfDialog";
 import IngestToastStack, { type IngestJob } from "./components/IngestToastStack";
 import LibrarySheet from "./components/LibrarySheet";
 import RenameSourceDialog from "./components/RenameSourceDialog";
+import ShelfContextMenu from "./components/ShelfContextMenu";
 import ShelfRail, { type ShelfFilter } from "./components/ShelfRail";
 import SourceContextMenu from "./components/SourceContextMenu";
 import SourceGrid from "./components/SourceGrid";
@@ -151,6 +154,11 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   const [renamingSource, setRenamingSource] = useState(false);
   const [createShelfOpen, setCreateShelfOpen] = useState(false);
   const [creatingShelf, setCreatingShelf] = useState(false);
+  const [shelfContextMenu, setShelfContextMenu] = useState<{ shelf: Shelf; x: number; y: number } | null>(null);
+  const [renameShelfTarget, setRenameShelfTarget] = useState<Shelf | null>(null);
+  const [renamingShelf, setRenamingShelf] = useState(false);
+  const [pendingDeleteShelfId, setPendingDeleteShelfId] = useState<string | null>(null);
+  const [deletingShelfId, setDeletingShelfId] = useState<string | null>(null);
   const [readingSource, setReadingSource] = useState<SourceMeta | null>(null);
   const [meridianCompanionOpen, setMeridianCompanionOpen] = useState(true);
   const readingShellRef = useRef<HTMLDivElement | null>(null);
@@ -217,6 +225,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
   isReadingRef.current = isReading;
   const pendingDelete = conversations.find((c) => c.id === pendingDeleteId) ?? null;
   const pendingDeleteSource = space?.sources.find((s) => s.id === pendingDeleteSourceId) ?? null;
+  const pendingDeleteShelf = shelves.find((s) => s.id === pendingDeleteShelfId) ?? null;
   const cardPoint = selectedPoint ?? hoveredPoint;
   const cardPosition = selectedPoint
     ? undefined
@@ -617,6 +626,47 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     }
   }
 
+  function handleShelfContextMenu(shelf: Shelf, position: { x: number; y: number }) {
+    setShelfContextMenu({ shelf, x: position.x, y: position.y });
+  }
+
+  async function confirmRenameShelf(name: string) {
+    if (!renameShelfTarget) return;
+    setRenamingShelf(true);
+    setError("");
+    try {
+      await renameShelf(token, renameShelfTarget.id, name);
+      await refreshShelves();
+      await refreshSpace();
+      setRenameShelfTarget(null);
+    } catch (err) {
+      handleAuthFailure(err);
+      setError(err instanceof Error ? err.message : "重命名资料架失败");
+    } finally {
+      setRenamingShelf(false);
+    }
+  }
+
+  async function confirmDeleteShelf() {
+    if (!pendingDeleteShelfId) return;
+    const shelfId = pendingDeleteShelfId;
+    setDeletingShelfId(shelfId);
+    setError("");
+    try {
+      await deleteShelf(token, shelfId);
+      setPendingDeleteShelfId(null);
+      setShelfContextMenu(null);
+      if (shelfFilter === shelfId) setShelfFilter("all");
+      await refreshShelves();
+      await refreshSpace();
+    } catch (err) {
+      handleAuthFailure(err);
+      setError(err instanceof Error ? err.message : "删除资料架失败");
+    } finally {
+      setDeletingShelfId(null);
+    }
+  }
+
   async function sendMessage(text?: string) {
     const msg = (text ?? draft).trim();
     if (!msg || isSending) return;
@@ -817,6 +867,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
               counts={shelfCounts}
               onFilterChange={setShelfFilter}
               onCreateShelf={() => setCreateShelfOpen(true)}
+              onShelfContextMenu={handleShelfContextMenu}
             />
             <div className="warehouse-main">
               {warehouseView === "spatial" ? (
@@ -1059,6 +1110,23 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         </div>
       )}
 
+      {!isReading && shelfContextMenu && (
+        <ShelfContextMenu
+          x={shelfContextMenu.x}
+          y={shelfContextMenu.y}
+          name={shelfContextMenu.shelf.name}
+          onRename={() => {
+            setRenameShelfTarget(shelfContextMenu.shelf);
+            setShelfContextMenu(null);
+          }}
+          onDelete={() => {
+            setPendingDeleteShelfId(shelfContextMenu.shelf.id);
+            setShelfContextMenu(null);
+          }}
+          onClose={() => setShelfContextMenu(null)}
+        />
+      )}
+
       <LibrarySheet
         open={libraryOpen}
         shelves={shelves}
@@ -1106,6 +1174,39 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         }}
         onConfirm={(title) => {
           void confirmRenameSource(title);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteShelfId != null}
+        title="删除这个资料架？"
+        description={
+          pendingDeleteShelf
+            ? `「${pendingDeleteShelf.name}」将被删除，架内的 ${shelfCounts[pendingDeleteShelf.id] ?? 0} 份资料会移至「未分类」。`
+            : "资料架删除后，架内资料会移至「未分类」。"
+        }
+        confirmLabel="删除"
+        busy={deletingShelfId != null}
+        onCancel={() => {
+          if (deletingShelfId == null) setPendingDeleteShelfId(null);
+        }}
+        onConfirm={() => {
+          void confirmDeleteShelf();
+        }}
+      />
+
+      <RenameSourceDialog
+        open={renameShelfTarget != null}
+        heading="重命名资料架"
+        placeholder="输入新名称"
+        currentTitle={renameShelfTarget?.name ?? ""}
+        maxLength={20}
+        busy={renamingShelf}
+        onCancel={() => {
+          if (!renamingShelf) setRenameShelfTarget(null);
+        }}
+        onConfirm={(name) => {
+          void confirmRenameShelf(name);
         }}
       />
 

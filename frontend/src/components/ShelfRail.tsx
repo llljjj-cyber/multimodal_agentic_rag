@@ -9,6 +9,7 @@ type Props = {
   counts: Record<string, number>;
   onFilterChange: (filter: ShelfFilter) => void;
   onCreateShelf: () => void;
+  onShelfContextMenu?: (shelf: Shelf, position: { x: number; y: number }) => void;
 };
 
 export default function ShelfRail({
@@ -17,6 +18,7 @@ export default function ShelfRail({
   counts,
   onFilterChange,
   onCreateShelf,
+  onShelfContextMenu,
 }: Props) {
   return (
     <aside className="shelf-rail" aria-label="资料架">
@@ -47,6 +49,12 @@ export default function ShelfRail({
           type="button"
           className={`shelf-rail-item${filter === shelf.id ? " active" : ""}`}
           onClick={() => onFilterChange(shelf.id)}
+          onContextMenu={(e) => {
+            if (!onShelfContextMenu) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onShelfContextMenu(shelf, { x: e.clientX, y: e.clientY });
+          }}
         >
           <BookMarked size={15} />
           <span>{shelf.name}</span>
