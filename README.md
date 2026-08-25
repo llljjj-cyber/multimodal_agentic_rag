@@ -116,6 +116,26 @@ Meridian 基于 **Google ADK**，在 `/chat/stream` 对话中按需调用以下�
 - 入库/修改/删除资料响应含最新 `space`，可直接刷新视图
 - 向量检索不单独暴露 HTTP 接口，由 Agent 在对话中按需调用
 
+## 检索评测
+
+在约 **3 万 chunk / 80+ 资料**（含大量同质年报干扰）的库上，用自建 golden set 评估 `search_chunks`（Top-K=6）。
+
+| 指标 | 结果 | 说明 |
+|------|------|------|
+| 标题命中 `title_hit` | **18/20 (90%)** | Top-K 片段所属 `source.title` 是否匹配期望资料 |
+| 关键词命中 `keyword_hit` | **14/20 (70%)** | Top-K 合并文本（含父子回填）是否含全部期望关键词 |
+| 双指标同时命中 | **13/20 (65%)** | 上两者同时成立 |
+| RAGAS `context_recall` | **0.81** | 参考答案信息是否出现在检索上下文中（LLM 评判） |
+| RAGAS `context_precision` | **0.55** | 检索片段中真正有用的比例（LLM 评判） |
+
+总结：
+- 高 title_hit 和 context_recall 说明在多数情况下期望文档能进入top_k， 但低 context_precision 表明期望文档可能排序靠后。
+- context_precision 只有 0.55 结合 keyword_hit 推测因为是父子文档结构返回的是 parent 大段导致噪音过多、以及同质年报混入 Top-k 有关，是否影响生成效果还待验证。
+
+[测试集](backend/eval/golden.example.json)
+[详细结果](backend/eval/result.md)
+
+
 ## CI/CD
 
 Push 到 `newfrontend` → GitHub Actions 构建镜像推到 GHCR → SSH 到 ECS `docker compose pull && up -d`。
@@ -124,6 +144,7 @@ Push 到 `newfrontend` → GitHub Actions 构建镜像推到 GHCR → SSH 到 EC
 
 - 线上只支持 1 ~ 3 人同时使用
 - 资料量大时，PCA 计算量增大导致 GET /space 接口响应变慢；agent 使用 retrieve_relevant_sources 工具时长变长，可能导致 /chat/stream 接口响应变慢
+- 数据库尚未对向量建立索引，数据量大时，也会导致 agent 使用检索工具时长变长
 - 混合向量入库和检索暂不支持
 - JWT TOKEN 30 min 后失效，需手动更新
 - /source/url，/text 接口入库不支持网页阅读。
