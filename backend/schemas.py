@@ -63,6 +63,7 @@ class SourceOut(BaseModel):
         validation_alias="metadata_",
     )
     shelf_id: str | None = None
+    shelf_name: str | None = None 
     chunk_count: int = 0
     created_at: datetime
 

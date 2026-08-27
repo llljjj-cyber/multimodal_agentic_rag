@@ -34,6 +34,33 @@ async def init_db() -> None:
             text(
                 """
                 ALTER TABLE sources
+                ADD COLUMN IF NOT EXISTS centroid_vector vector(1024);
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE sources
+                ADD COLUMN IF NOT EXISTS proj_x DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS proj_y DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS proj_z DOUBLE PRECISION;
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_chunks_vector_hnsw
+                ON chunks USING hnsw (vector vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64);
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE sources
                 ADD COLUMN IF NOT EXISTS shelf_id VARCHAR(16)
                 """
             )

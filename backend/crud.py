@@ -107,21 +107,39 @@ async def list_sources_by_user_id(db: AsyncSession, user_id: str) -> list[Source
     return list(result.scalars().all())
 
 
-async def search_in_source(
+async def search_best_chunk_per_source(
     db: AsyncSession,
+    user_id: str,
     query_vector: list[float],
-    source: SourceModel,
-    top_k: int = 5,
-) -> list[tuple[ChunkModel, float]]:
-    distance = ChunkModel.vector.cosine_distance(query_vector)
-    result = await db.execute(
-        select(ChunkModel)
-        .where(ChunkModel.source_id == source.id)
-        .add_columns(distance.label("distance"))
-        .order_by(distance)
+    top_k: int = 6,
+) -> list[tuple[ChunkModel, float, SourceModel]]:
+    """每份资料取相似度最高的 1 个 chunk，再按距离排序取 top_k。"""
+    distance_expr = ChunkModel.vector.cosine_distance(query_vector)
+    ranked = (
+        select(
+            ChunkModel.id.label("chunk_id"),
+            distance_expr.label("distance"),
+            func.row_number()
+            .over(
+                partition_by=ChunkModel.source_id,
+                order_by=distance_expr,
+            )
+            .label("rn"),
+        )
+        .join(SourceModel, ChunkModel.source_id == SourceModel.id)
+        .where(SourceModel.user_id == user_id)
+        .subquery()
+    )
+    stmt = (
+        select(ChunkModel, ranked.c.distance, SourceModel)
+        .join(ranked, ChunkModel.id == ranked.c.chunk_id)
+        .join(SourceModel, ChunkModel.source_id == SourceModel.id)
+        .where(ranked.c.rn == 1)
+        .order_by(ranked.c.distance)
         .limit(top_k)
     )
-    return result.all()
+    rows = (await db.execute(stmt)).all()
+    return [(chunk, float(distance), source) for chunk, distance, source in rows]
 
 
 async def search_chunks(
@@ -160,12 +178,17 @@ async def get_count_by_user_id(
     result = await db.execute(stmt)
     return result.scalar_one()
 
-async def get_parent_doc_by_id(
+async def get_parent_docs_by_ids(
     db: AsyncSession,
-    parent_id: str,
-) -> ParentDocModel | None:
-    result = await db.execute(select(ParentDocModel).where(ParentDocModel.id == parent_id))
-    return result.scalar_one_or_none()
+    parent_ids: list[str],
+) -> dict[str, ParentDocModel]:
+    """批量加载 parent 文档，返回 id -> ParentDocModel 映射。"""
+    if not parent_ids:
+        return {}
+    result = await db.execute(
+        select(ParentDocModel).where(ParentDocModel.id.in_(parent_ids))
+    )
+    return {doc.id: doc for doc in result.scalars().all()}
 
 
 async def count_by_modality(db: AsyncSession, user_id: str, Model: Base) -> dict[str, int]:
@@ -248,6 +271,33 @@ async def space_stats(db: AsyncSession, user_id: str) -> dict:
         "modalities": source_modalities,
         "chunk_modalities": chunk_modalities,
     }
+
+
+async def update_source_centroid(
+    db: AsyncSession,
+    source: SourceModel,
+    centroid: list[float],
+) -> None:
+    source.centroid_vector = centroid
+    await db.flush()
+
+    
+async def update_source_projections(
+    db: AsyncSession,
+    projection_map: dict[str, dict[str, float]],
+) -> None:
+    if not projection_map:
+        return
+    ids = list(projection_map.keys())
+    result = await db.execute(select(SourceModel).where(SourceModel.id.in_(ids)))
+    for source in result.scalars().all():
+        proj = projection_map.get(source.id)
+        if not proj:
+            continue
+        source.proj_x = proj["x"]
+        source.proj_y = proj["y"]
+        source.proj_z = proj["z"]
+    await db.flush()
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> UserModel | None:

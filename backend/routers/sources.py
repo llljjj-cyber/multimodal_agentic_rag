@@ -178,8 +178,7 @@ async def rename_source(
     if not source:
         raise HTTPException(404, "未找到该资料。")
     source = await crud.update_source_title(db, source, req.title)
-    space = await get_space_snapshot(db, user.id)
-    return {"source": SourceOut.model_validate(source), "space": space}
+    return {"source": SourceOut.model_validate(source)}
 
 @router.patch("/{source_id}/shelf")
 async def move_source_to_shelf(
@@ -193,9 +192,18 @@ async def move_source_to_shelf(
         raise HTTPException(404, "未找到该资料。")
     if source.user_id != user.id:
         raise HTTPException(403, "无权修改")
-    await crud.move_source_to_shelf(db, source, req.shelf_id)
-    space = await get_space_snapshot(db, user.id)
-    return {"source": SourceOut.model_validate(source), "space": space}
+    if req.shelf_id is not None:
+        shelf = await crud.get_shelf(db, req.shelf_id)
+        if not shelf or shelf.user_id != user.id:
+            raise HTTPException(404, "书架不存在")
+    source = await crud.move_source_to_shelf(db, source, req.shelf_id)
+    payload = SourceOut.model_validate(source).model_dump(mode="json")
+    if source.shelf_id:
+        shelf = await crud.get_shelf(db, source.shelf_id)
+        payload["shelf_name"] = shelf.name if shelf else None
+    else:
+        payload["shelf_name"] = None
+    return {"source": payload}
 
 @router.delete("/{source_id}")
 async def delete_source(

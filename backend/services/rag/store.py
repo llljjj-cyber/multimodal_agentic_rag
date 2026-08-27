@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 import crud
 from models import SourceModel
 from services.rag.embedding import get_bgem3_doc_embeddings
+from services.rag.space import compute_centroid, rebuild_user_space
 
 
 CHUNK_SIZE = 600         
@@ -101,8 +102,13 @@ async def add_text_source(
                 vector=meta.get("dense")
             )
         source.chunk_count = len(embed_docs)
+        dense_vectors = [doc.metadata.get("dense") for doc in embed_docs if doc.metadata.get("dense")]
+        centroid = compute_centroid(dense_vectors)
+        if centroid:
+            await crud.update_source_centroid(db, source, centroid)
         await db.commit()
         await db.refresh(source)
+        await rebuild_user_space(db, user_id)
     
     except Exception:
         await db.rollback()
@@ -252,7 +258,7 @@ def _parent_child_doc_from_md(file_path: str) -> tuple[list[Document], list[Docu
     loader = UnstructuredMarkdownLoader(
         file_path=file_path,
         mode="elements"
-    )
+)
     docs = loader.load()
     ex_docs: list[Document] = []
     for doc in docs:
@@ -298,6 +304,8 @@ async def add_file_source(
             sparse=sparse,
             colbert=colbert
         )
+        return source
+
     else:
         if modality.lower() == "pdf":
             md_path = str(await run_in_threadpool(_pdf_to_md, saved_path))
@@ -348,8 +356,13 @@ async def add_file_source(
                     vector=meta.get("dense")
                 )
             source.chunk_count = len(embed_docs)
+            dense_vectors = [doc.metadata.get("dense") for doc in embed_docs if doc.metadata.get("dense")]
+            centroid = compute_centroid(dense_vectors)
+            if centroid:
+                await crud.update_source_centroid(db, source, centroid)
             await db.commit()
             await db.refresh(source)
+            await rebuild_user_space(db, user_id)
         except Exception:
             await db.rollback()
             raise
@@ -370,6 +383,7 @@ async def remove_source(db: AsyncSession, user_id: str, source_id: str) -> bool:
     if not source or source.user_id != user_id:
         return False
     await crud.delete_source(db, source)
+    await rebuild_user_space(db, user_id)
     return True
 
 

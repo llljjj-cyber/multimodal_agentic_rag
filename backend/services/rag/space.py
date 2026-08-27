@@ -43,6 +43,25 @@ def _orthogonalize(vector: list[float], components: list[list[float]]) -> list[f
     return adjusted
 
 
+def compute_centroid(vectors: list[list[float]]) -> list[float] | None:
+    """chunk 向量求和后 L2 归一化。vectors 为空返回 None。"""
+    if not vectors:
+        return None
+    dim = min(len(vectors[0]), DIMENSIONS)
+    acc = [0.0] * dim
+    for vec in vectors:
+        for i in range(dim):
+            acc[i] += vec[i]
+    norm = math.sqrt(sum(v * v for v in acc)) or 1.0
+    return [v / norm for v in acc]
+
+
+def _projection_or_origin(source: SourceModel) -> dict[str, float]:
+    if source.proj_x is None or source.proj_y is None or source.proj_z is None:
+        return {"x": 0.0, "y": 0.0, "z": 0.0}
+    return {"x": source.proj_x, "y": source.proj_y, "z": source.proj_z}
+
+
 def _pca_projection(vectors: dict[str, list[float]]) -> dict[str, dict[str, float]]:
     if not vectors:
         return {}
@@ -99,28 +118,6 @@ def _pca_projection(vectors: dict[str, list[float]]) -> dict[str, dict[str, floa
     }
 
 
-async def _source_vector(db: AsyncSession, source: SourceModel) -> list[float]:
-    chunks: list[ChunkModel] = await crud.chunks_for_source(db, source)
-    if not chunks:
-        return [0.0] * DIMENSIONS
-
-    vector = [0.0] * DIMENSIONS
-    for chunk in chunks:
-        for index, value in enumerate(chunk.vector[: DIMENSIONS]): 
-            vector[index] += value
-    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-    return [value / norm for value in vector]
-
-
-async def _source_vectors(db: AsyncSession, user_id: str) -> dict[str, list[float]]:
-    sources: list[SourceModel] = await crud.list_sources_by_user_id(db, user_id)
-    vectors: list[list[float]] = []
-    for source in sources:
-        vector = await _source_vector(db, source)
-        vectors.append(vector)
-    return {source.id: vector for source, vector in zip(sources, vectors)}
-
-
 def _source_point(source: SourceModel, projection: dict[str, float]) -> dict[str, Any]:
     return {
         "id": source.id,
@@ -133,22 +130,52 @@ def _source_point(source: SourceModel, projection: dict[str, float]) -> dict[str
     }
 
 
-async def snapshot(db: AsyncSession, user_id: str, projections: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
-    source_vectors = await _source_vectors(db, user_id)
-    projection_map = projections or await run_in_threadpool(_pca_projection, source_vectors)
+async def rebuild_user_space(db: AsyncSession, user_id: str) -> None:
+    """入库/删除后：读 centroid → PCA → 写 proj_x/y/z。"""
     sources: list[SourceModel] = await crud.list_sources_by_user_id(db, user_id)
+    
+    if not sources:
+        return
+
+    vectors: dict[str, list[float]] = {}
+    for source in sources:
+        if source.centroid_vector is not None:
+            vec = source.centroid_vector
+            
+            if hasattr(vec, "tolist"):
+                vec = vec.tolist()
+            vectors[source.id] = vec[:DIMENSIONS]
+
+    if not vectors:
+        return
+
+    projection_map = await run_in_threadpool(_pca_projection, vectors)
+    await crud.update_source_projections(db, projection_map)
+    await db.commit()
+
+
+def _source_out_payload(source: SourceModel, shelf_names: dict[str, str]) -> dict[str, Any]:
+    data = SourceOut.model_validate(source).model_dump(mode="json")
+    data["shelf_name"] = shelf_names.get(source.shelf_id) if source.shelf_id else None
+    return data
+
+
+async def snapshot(db: AsyncSession, user_id: str) -> dict[str, Any]:
+    sources: list[SourceModel] = await crud.list_sources_by_user_id(db, user_id)
+    shelves = await crud.list_shelves_by_user_id(db, user_id)
+    shelf_names = {shelf.id: shelf.name for shelf in shelves}
     points = [
-        _source_point(source, projection_map.get(source.id, {"x": 0.0, "y": 0.0, "z": 0.0}))
+        _source_point(source, _projection_or_origin(source))
         for source in sources
     ]
     return {
-        "sources": [SourceOut.model_validate(source).model_dump(mode="json") for source in sources],
+        "sources": [_source_out_payload(source, shelf_names) for source in sources],
         "points": points,
         "dimensions": DIMENSIONS,
         "embedding_model": EMBED_MODEL,
         "projection": {
             "method": "pca_3d",
-            "basis": "当前资料向量，提问时会一并包含查询向量",
+            "basis": "写入资料库时预计算",
         },
     }
 

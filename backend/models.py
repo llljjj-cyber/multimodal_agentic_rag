@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint  # Text 是一个可变长度的文本字段，没有长度限制（不像 String(255)那样有最大字符数），适合存储较长的内容
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, Float, UniqueConstraint  # Text 是一个可变长度的文本字段，没有长度限制（不像 String(255)那样有最大字符数），适合存储较长的内容
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -76,6 +76,12 @@ class SourceModel(Base):
     summary: Mapped[str] = mapped_column(Text, default="")
     saved_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    centroid_vector: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(DEFAULT_DIMENSIONS), nullable=True
+    )
+    proj_x: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    proj_y: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    proj_z: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -88,8 +94,6 @@ class SourceModel(Base):
     parents: Mapped[list["ParentDocModel"]] = relationship(back_populates="source", cascade="all, delete-orphan")
    
     
-
-
 class ChunkModel(Base):
     __tablename__ = "chunks"
 

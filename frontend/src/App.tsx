@@ -535,16 +535,16 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     setContextMenu(null);
     setError("");
     try {
-      const data = await moveSourceToShelf(token, sourceId, shelfId);
-      if (data.space) setSpace(normalizeSpace(data.space));
-      else await refreshSpace();
+      await moveSourceToShelf(token, sourceId, shelfId);
       await refreshShelves();
+      await refreshSpace();
     } catch (err) {
       handleAuthFailure(err);
       setError(err instanceof Error ? err.message : "移动失败");
     }
   }
 
+  
   function toggleBatchMode() {
     setBatchMode((on) => {
       if (on) {
@@ -586,8 +586,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
     try {
       for (const sourceId of ids) {
         try {
-          const data = await moveSourceToShelf(token, sourceId, shelfId);
-          if (data.space) setSpace(normalizeSpace(data.space));
+          await moveSourceToShelf(token, sourceId, shelfId);
           succeeded.add(sourceId);
         } catch (err) {
           fail += 1;
@@ -595,6 +594,7 @@ function Workspace({ token, username, onLogout }: { token: string; username: str
         }
       }
       await refreshShelves();
+      await refreshSpace(); 
       setBatchSelectedIds((prev) => {
         const next = new Set(prev);
         for (const id of succeeded) next.delete(id);

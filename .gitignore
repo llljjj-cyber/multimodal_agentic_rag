@@ -32,7 +32,7 @@ frontend/dist/
 frontend/.vite/
 frontend/tsconfig.tsbuildinfo
 
-
+react-practice
 # 本地模型（BGE 等）
 models/
 *.pt
